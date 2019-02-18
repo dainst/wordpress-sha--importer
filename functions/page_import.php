@@ -34,7 +34,7 @@ add_action('admin_menu', function () {
                     echo "<div class='error'>Pre-Import-Check-Failed: <pre>$check</pre></div>";
                     $success = false;
                 } else {
-                    $success = $ds->fetch();
+                    $success = $ds->fetch(0, true);
                 }
             } catch (Exception $exception) {
                 $success = false;
@@ -45,7 +45,7 @@ add_action('admin_menu', function () {
                 $items = $ds->pages * $ds->items_per_page;
                 echo "<strong>Import {$ds->pages} pages of data (about $items items)?</strong><br>";
                 $page = isset($_POST['shap_ds_page']) ? $_POST['shap_ds_page'] : 0;
-                echo "<label for='shap_ds_page'>Page</label><input type='text' name='shap_ds_page' value='$page' style='width: 3em'>";
+                echo "<label for='shap_ds_page'>Page</label><input type='text' name='shap_ds_page' value='$page' style='width: 4em'>";
                 echo "<div class='button' id='shap-import-start'>Start</div>";
 
             } else {
@@ -103,7 +103,7 @@ add_action('wp_ajax_shap_import_next_page', function() {
     if (!$ds->fetch($next)) {
         echo json_encode(array(
             "success" => false,
-            "message" => implode(",", $ds->errors)
+            "message" => "<strong>Some Errors: </strong><ul><li>" . implode("</li><li>", $ds->errors) . "</li></ul>"
         ));
         wp_die();
     }

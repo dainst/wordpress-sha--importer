@@ -38,7 +38,7 @@ namespace shap_datasource {
 
 		// a debug feature
         public $last_fetched_url;
-		
+
 
         /**
          *
@@ -47,10 +47,11 @@ namespace shap_datasource {
          * This is a generic function, it can be overwritten in some implementations
          *
          *
-         * @param null $query
+         * @param int $page
+         * @param bool $test
          * @return true or false depending to success;
          */
-		function fetch(int $page = 0) : bool {
+		function fetch(int $page = 0, $test = false) : bool {
 			try {
 
                 $queryurl = $this->api_fetch_url($page);
@@ -59,7 +60,8 @@ namespace shap_datasource {
                     echo shap_debug($queryurl);
                 }
 
-                $this->results = $this->parse_result_set($this->_generic_api_call($queryurl));
+                $result = $this->_generic_api_call($queryurl);
+                $this->results = $this->parse_result_set($result, $test);
 
 			} catch (\Exception $e) {
 				$this->error($e->getMessage());
@@ -67,6 +69,7 @@ namespace shap_datasource {
 
 			return (!count($this->errors));
 		}
+
 
         /**
          *
@@ -114,9 +117,10 @@ namespace shap_datasource {
          *
          * @param array|object $result
          *
+         * @param bool $test
          * @return array
          */
-		abstract function parse_result_set($result) : array;
+		abstract function parse_result_set($result, bool $test = false) : array;
 		
 		abstract function parse_result($result);
 		
@@ -135,26 +139,6 @@ namespace shap_datasource {
 		protected function error($error_text) {
 			$this->errors[] = $error_text;
 		}
-		
-
-		/**
-		 * shows the list of search results to select one! 
-		 * TODO keep?
-		 */
-		function show_result() {
-			$this->show_pagination();
-			
-			echo "<div class='esa_item_list'>";
-			foreach ($this->results as $result) {
-				if (is_object($result)) {
-					$result->html();
-				}
-			}
-			if (!count($this->results)) {
-			    echo "<div class='notice inline notice-warning notice-alt'><p>No results found</p></div>";
-            }
-			echo "</div><div style='clear:both'></div>";
-		}
 
 
 		/**
@@ -172,18 +156,17 @@ namespace shap_datasource {
 		/**
 		 * if the functionality of the datasource relies onto something special like specific php libraries or external software,
 		 * you can implement a dependency check on wose result the availability in wordpress depends.
-         * TODO keep?
 		 * @return string
 		 * @throws Exception if not
 		 */
-		function dependency_check() {
+		function dependency_check() : string {
 			return 'O. K.';
 		}
 
         /**
          * checks if curl is available.. can be used in dependency_check
          */
-		function check_for_curl() {
+		function check_for_curl() : bool {
 		    return (
                 function_exists("curl_init") and
                 function_exists("curl_setopt") and

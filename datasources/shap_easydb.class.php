@@ -3,7 +3,7 @@
 
 namespace shap_datasource {
 
-    use esa_item\image;
+    use mysql_xdevapi\Exception;
 
     class shap_easydb extends abstract_datasource {
 
@@ -23,7 +23,7 @@ namespace shap_datasource {
             $this->_easydb_pass = get_option('shap_db_pass');
         }
 
-        function dependency_check() {
+        function dependency_check() : string {
             if (!$this->check_for_curl()) {
                 throw new \Exception('PHP Curl extension not installed');
             }
@@ -31,7 +31,7 @@ namespace shap_datasource {
             return 'O. K.';
         }
 
-        function parse_error_response($msg) {
+        function parse_error_response($msg) : string {
             $json_msg = json_decode($msg);
             if (is_object($json_msg)) {
                 return isset($json_msg->description) ? $json_msg->description : $json_msg->code;
@@ -39,7 +39,7 @@ namespace shap_datasource {
             return $msg;
         }
 
-        function get_easy_db_session_token() {
+        function get_easy_db_session_token() : string {
             if ($this->_session_token) {
                 return $this->_session_token;
             }
@@ -138,15 +138,24 @@ namespace shap_datasource {
 //            return $this->api_search_url($query, $params);
 //        }
 
-        function parse_result_set($response) : array {
-            $response = json_decode($response);
-            $this->results = array();
-            foreach ($response->objects as $item) {
-                $this->results[] = $this->parse_result($this->_fetch_external_data($this->api_single_url($item->_system_object_id)));
-            }
+        function parse_result_set($response, bool $test = false) : array {
+            $response = $this->_json_decode($response);
 
             $this->pages = (int) ($response->count / $this->items_per_page) + 1;
             $this->page = isset($response->offset) ? ((int) ($response->offset / $this->items_per_page) + 1) : 1;
+
+            if ($test) {
+                return array();
+            }
+
+            $this->results = array();
+            foreach ($response->objects as $item) {
+                try {
+                    $this->results[] = $this->parse_result($this->_fetch_external_data($this->api_single_url($item->_system_object_id)));
+                } catch (\Exception $e) {
+                    $this->error($e->getMessage());
+                }
+            }
 
             return $this->results;
         }
@@ -158,13 +167,54 @@ namespace shap_datasource {
             $object_type = $json_response[0]->_objecttype;
             $object = $json_response[0]->{$object_type};
 
-            $title = "Image #" . $system_object_id;
+            if ($object_type !== "bilder") {
+                $this->error("Object $system_object_id is not from Bilder!");
+                return false;
+            }
 
-//            if ($object_type !== "bilder") {
-//                return new \esa_item("shap_easydb", $system_object_id, "not in bilder: $object_type", $this->api_record_url($system_object_id), "error");
-//            }
-//
-//            $this->_parse_title($object, $data);
+            $title = $this->_parse_title($object, "Image #" . $system_object_id);
+
+            // images
+            if (isset($object->bild) and isset($object->bild[0]->versions)) {
+
+                $versions = array_filter((array) $object->bild[0]->versions, function($v) {
+                    return  ($v->status !== "failed") && (!$v->_not_allowed);
+                });
+
+//                if (isset($versions['full'])) {
+//                    $v = 'full';
+//                } else if (isset($versions['original'])) {
+//                    $v = 'original';
+//                } else
+                    if (isset($versions['small'])) {
+                    $v = 'small';
+                } else {
+                    throw new \Exception("Could not fetch Image #$system_object_id (no version available)");
+                }
+
+                $image_title = $object->bild[0]->original_filename;
+                $filename = $this->_download_image($versions[$v]->url, "shap_import_$system_object_id.{$versions[$v]->extension}");
+                $filetype = wp_check_filetype(basename($filename), null);
+                $wp_upload_dir = wp_upload_dir();
+                $attachment = array(
+                    'guid'           => $wp_upload_dir['url'] . '/' . basename($filename),
+                    'post_mime_type' => $filetype['type'],
+                    'post_title'     => "$title | $image_title",
+                    'post_content'   => '',
+                    'post_status'    => 'inherit'
+                );
+
+                $attach_id = wp_insert_attachment($attachment, $filename);
+
+                require_once(ABSPATH . 'wp-admin/includes/image.php');
+
+                $attach_data = wp_generate_attachment_metadata($attach_id, $filename);
+                wp_update_attachment_metadata($attach_id, $attach_data);
+
+            }
+
+
+
 //            $this->_parse_blocks($object, $data);
 //            $this->_parse_nested($object, $data);
 //            $this->_parse_date($object, $data);
@@ -173,26 +223,7 @@ namespace shap_datasource {
 //
 //            list($lat, $lon) = $this->_parse_place($object, $data);
 //
-//            // images
-//            if (isset($object->bild) and isset($object->bild[0]->versions)) {
-//
-//                $image = array();
-//                $image['url']   = $object->bild[0]->versions->small->url;
-//
-//                $versions = array_filter((array) $object->bild[0]->versions, function($v) {
-//                    return  ($v->status !== "failed") && (!$v->_not_allowed);
-//                });
-//
-//                if (isset($versions['full'])) {
-//                    $image['fullres']   = $versions->full->url;
-//                } else if (isset($versions['original'])) {
-//                    $image['fullres']   = $versions->original->url;
-//                }
-//                $image['title'] = $object->bild[0]->original_filename;
-//
-//
-//                $image = new \esa_item\image($image);
-//            }
+
 //
 //            $html = $image->render();
 //
@@ -203,20 +234,46 @@ namespace shap_datasource {
 //                $html .= "<div class='esa_shap_subtext'>{$object->copyright_vermerk->$en}</div>";
 //            }
 
-            return $title;
+            return $filename;
         }
 
 
+        private function _download_image($url, $filename) : string {
+            set_time_limit(0);
+            ini_set("memory_limit",-1); // TODO increase memory reasonable!
 
-        function _parse_title($o, \esa_item\data $data) {
+            $wp_upload_dir = wp_upload_dir();
+            $ch = curl_init($url);
+            $filepath = $wp_upload_dir['path'] . '/' . $filename;
+            $fp = fopen($filepath, 'w+');
+            curl_setopt($ch, CURLOPT_TIMEOUT, 300);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_HEADER, 0);
+            curl_setopt($ch, CURLOPT_FILE, $fp);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+            $result = curl_exec($ch);
+            $error = curl_errno($ch);
+            fclose($fp);
+            curl_close($ch);
+            if($error) {
+                throw new \Exception('Curl Error: ' . $error);
+            }
+            if (!file_exists($filepath)) {
+                throw new \Exception("Something went wrong downloading $filepath");
+            }
+            return $result ? $filepath : "";
+        }
+
+        function _parse_title($o, $default) : string {
             $en = "en-US";
             if (isset($o->ueberschrift)) {
-                $data->title = $o->ueberschrift->$en;
+                return $o->ueberschrift->$en;
             } else if (isset($o->titel)) {
-                $data->title = $o->titel->$en;
+                return $o->titel->$en;
             } else if (isset($o->beschreibung)) {
-                $data->title = $o->beschreibung->$en;
+                return $o->beschreibung->$en;
             }
+            return $default;
         }
 
         function _parse_pool($o, \esa_item\data $data) {
