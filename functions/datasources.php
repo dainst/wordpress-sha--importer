@@ -1,5 +1,5 @@
 <?php
-function shap_get_datasource($ds) {
+function shap_get_datasource($ds) : \shap_datasource\abstract_datasource {
     if (!$ds) {
         return null;
     }

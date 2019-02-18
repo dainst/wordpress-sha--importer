@@ -7,13 +7,7 @@ namespace shap_datasource {
 
     class shap_easydb extends abstract_datasource {
 
-        public $title = 'SHAP - EasyDB'; // Label / Title of the Datasource
-        public $index = 1; // where to appear in the menu
-        public $info = "<p>...Kurzbeschreibung...</p>"; // get created automatically, or enter text
-        public $homeurl; // link to the dataset's homepage
         public $debug = false;
-        //public $examplesearch; // placeholder for search field
-        //public $searchbuttonlabel = 'Search'; // label for searchbutton
 
         public $force_curl = true;
 
@@ -23,12 +17,10 @@ namespace shap_datasource {
         private $_easydb_user = "";
         private $_easydb_pass = "";
 
-        private $_items_per_page = 12;
-
-        function construct() {
-//            $this->_easydb_url  = esa_get_settings('modules', 'shap_easydb', 'easyurl');
-//            $this->_easydb_user = esa_get_settings('modules', 'shap_easydb', 'easyuser');
-//            $this->_easydb_pass = esa_get_settings('modules', 'shap_easydb', 'easypass');
+        function __construct() {
+            $this->_easydb_url  = get_option('shap_db_url');
+            $this->_easydb_user = get_option('shap_db_user');
+            $this->_easydb_pass = get_option('shap_db_pass');
         }
 
         function dependency_check() {
@@ -96,7 +88,7 @@ namespace shap_datasource {
             $this->get_easy_db_session_token();
 
             $search = array(
-                "limit" => $this->_items_per_page,
+                "limit" => $this->items_per_page,
                 "objecttypes" => array("bilder"),
 	            "generate_rights" => false
             );
@@ -126,25 +118,25 @@ namespace shap_datasource {
 
         function api_search_url_next($query, $params = array()) {
             $this->page += 1;
-            $params['offset'] = ($this->page - 1) * $this->_items_per_page;
+            $params['offset'] = ($this->page - 1) * $this->items_per_page;
             return $this->api_search_url($query, $params);
         }
 
         function api_search_url_prev($query, $params = array()) {
             $this->page -= 1;
-            $params['offset'] = ($this->page - 1) * $this->_items_per_page;
+            $params['offset'] = ($this->page - 1) * $this->items_per_page;
             return $this->api_search_url($query, $params);
         }
 
         function api_search_url_first($query, $params = array()) {
             $this->page = 1;
-            $params['offset'] = ($this->page - 1) * $this->_items_per_page;
+            $params['offset'] = ($this->page - 1) * $this->items_per_page;
             return $this->api_search_url($query, $params);
         }
 
         function api_search_url_last($query, $params = array()) {
             $this->page = $this->pages;
-            $params['offset'] = ($this->page - 1) * $this->_items_per_page;
+            $params['offset'] = ($this->page - 1) * $this->items_per_page;
             return $this->api_search_url($query, $params);
         }
 
@@ -155,67 +147,65 @@ namespace shap_datasource {
                 $this->results[] = $this->parse_result($this->_fetch_external_data($this->api_single_url($item->_system_object_id)));
             }
 
-            $this->pages = (int) ($response->count / $this->_items_per_page) + 1;
-            $this->page = isset($response->offset) ? ((int) ($response->offset / $this->_items_per_page) + 1) : 1;
+            $this->pages = (int) ($response->count / $this->items_per_page) + 1;
+            $this->page = isset($response->offset) ? ((int) ($response->offset / $this->items_per_page) + 1) : 1;
 
             return $this->results;
         }
 
-        function parse_result($response) : \esa_item{
+        function parse_result($response) {
 
             $json_response = $this->_json_decode($response);
             $system_object_id = $json_response[0]->_system_object_id;
             $object_type = $json_response[0]->_objecttype;
             $object = $json_response[0]->{$object_type};
 
-            $data = new \esa_item\data();
+            $title = "Image #" . $system_object_id;
 
-            $data->title = "Image #" . $system_object_id;
+//            if ($object_type !== "bilder") {
+//                return new \esa_item("shap_easydb", $system_object_id, "not in bilder: $object_type", $this->api_record_url($system_object_id), "error");
+//            }
+//
+//            $this->_parse_title($object, $data);
+//            $this->_parse_blocks($object, $data);
+//            $this->_parse_nested($object, $data);
+//            $this->_parse_date($object, $data);
+//            $this->_parse_pool($object, $data);
+//            $this->_parse_tags($json_response[0], $data);
+//
+//            list($lat, $lon) = $this->_parse_place($object, $data);
+//
+//            // images
+//            if (isset($object->bild) and isset($object->bild[0]->versions)) {
+//
+//                $image = array();
+//                $image['url']   = $object->bild[0]->versions->small->url;
+//
+//                $versions = array_filter((array) $object->bild[0]->versions, function($v) {
+//                    return  ($v->status !== "failed") && (!$v->_not_allowed);
+//                });
+//
+//                if (isset($versions['full'])) {
+//                    $image['fullres']   = $versions->full->url;
+//                } else if (isset($versions['original'])) {
+//                    $image['fullres']   = $versions->original->url;
+//                }
+//                $image['title'] = $object->bild[0]->original_filename;
+//
+//
+//                $image = new \esa_item\image($image);
+//            }
+//
+//            $html = $image->render();
+//
+//            if (isset($object->copyright_vermerk) and is_string($object->copyright_vermerk)) {
+//                $html .= "<div class='esa_shap_subtext'>{$object->copyright_vermerk}</div>";
+//            } else if (isset($object->copyright_vermerk) and is_object($object->copyright_vermerk)) {
+//                $en = "en-US";
+//                $html .= "<div class='esa_shap_subtext'>{$object->copyright_vermerk->$en}</div>";
+//            }
 
-            if ($object_type !== "bilder") {
-                return new \esa_item("shap_easydb", $system_object_id, "not in bilder: $object_type", $this->api_record_url($system_object_id), "error");
-            }
-
-            $this->_parse_title($object, $data);
-            $this->_parse_blocks($object, $data);
-            $this->_parse_nested($object, $data);
-            $this->_parse_date($object, $data);
-            $this->_parse_pool($object, $data);
-            $this->_parse_tags($json_response[0], $data);
-
-            list($lat, $lon) = $this->_parse_place($object, $data);
-
-            // images
-            if (isset($object->bild) and isset($object->bild[0]->versions)) {
-
-                $image = array();
-                $image['url']   = $object->bild[0]->versions->small->url;
-
-                $versions = array_filter((array) $object->bild[0]->versions, function($v) {
-                    return  ($v->status !== "failed") && (!$v->_not_allowed);
-                });
-
-                if (isset($versions['full'])) {
-                    $image['fullres']   = $versions->full->url;
-                } else if (isset($versions['original'])) {
-                    $image['fullres']   = $versions->original->url;
-                }
-                $image['title'] = $object->bild[0]->original_filename;
-
-
-                $image = new \esa_item\image($image);
-            }
-
-            $html = $image->render();
-
-            if (isset($object->copyright_vermerk) and is_string($object->copyright_vermerk)) {
-                $html .= "<div class='esa_shap_subtext'>{$object->copyright_vermerk}</div>";
-            } else if (isset($object->copyright_vermerk) and is_object($object->copyright_vermerk)) {
-                $en = "en-US";
-                $html .= "<div class='esa_shap_subtext'>{$object->copyright_vermerk->$en}</div>";
-            }
-
-            return new \esa_item("shap_easydb", $system_object_id, $html, $this->api_record_url($system_object_id), $data->title, array(), array(), $lat, $lon, $data->_data);
+            return $title;
         }
 
 
