@@ -7,6 +7,8 @@ var shap_i = {
 
     import_next_page: function(page) {
 
+        page = parseInt(page);
+
         if (shap_i.status !== "running") {
             return;
         }
@@ -45,7 +47,8 @@ var shap_i = {
         console.log("start import");
         if (shap_i.status !== "running") {
             shap_i.update_status("running");
-            shap_i.import_next_page(0);
+            shap_i.import_next_page(jQuery('[name="shap_ds_page"]').val());
+            jQuery('[name="shap_ds_page"]').attr('readonly', true);
         } else {
             shap_i.update_status("aborted");
         }

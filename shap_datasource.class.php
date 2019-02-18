@@ -50,13 +50,10 @@ namespace shap_datasource {
          * @param null $query
          * @return true or false depending to success;
          */
-		function fetch() {
+		function fetch(int $page = 0) : bool {
 			try {
 
-				$this->page  = (isset($_POST['esa_ds_page'])) ? $_POST['esa_ds_page'] : null;
-				$this->pages  = (isset($_POST['esa_ds_pages'])) ? $_POST['esa_ds_pages'] : null;
-
-                $queryurl = $this->api_search_url('*');
+                $queryurl = $this->api_fetch_url($page);
 
                 if ($this->debug) {
                     echo shap_debug($queryurl);
@@ -124,11 +121,10 @@ namespace shap_datasource {
 		abstract function parse_result($result);
 		
 		abstract function api_single_url($id, $params = array()) : string;
-		
-		abstract function api_search_url($query, $params = array());
-		
+
 		abstract function api_record_url($id, $params = array()) : string;
-		
+
+		abstract function api_fetch_url(int $page);
 
 		/**
 		 * 

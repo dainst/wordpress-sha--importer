@@ -83,7 +83,7 @@ namespace shap_datasource {
             return "{$this->_easydb_url}/lists/bilder/id";
         }
 
-        function api_search_url($query, $params = array()) {
+        function api_fetch_url(int $page = 0) {
 
             $this->get_easy_db_session_token();
 
@@ -93,21 +93,19 @@ namespace shap_datasource {
 	            "generate_rights" => false
             );
 
-            if (!in_array($query, array("", "*"))) {
-                $search["search"] = array(
-                    array(
-                        "type" => "match",
-                        "mode" => "token",
-                        "string"=> $query,
-                        "phrase"=> true
-                    )
-                );
-            }
+            //            if (!in_array($query, array("", "*"))) {
+            //                $search["search"] = array(
+            //                    array(
+            //                        "type" => "match",
+            //                        "mode" => "token",
+            //                        "string"=> $query,
+            //                        "phrase"=> true
+            //                    )
+            //                );
+            //            }
 
-            if (isset($params['offset'])) {
-                $search['offset'] = $params['offset'];
-            }
 
+            $search['offset'] = $page * $this->items_per_page;
 
             return (object) array(
                 'method' => 'post',
@@ -116,29 +114,29 @@ namespace shap_datasource {
             );
         }
 
-        function api_search_url_next($query, $params = array()) {
-            $this->page += 1;
-            $params['offset'] = ($this->page - 1) * $this->items_per_page;
-            return $this->api_search_url($query, $params);
-        }
-
-        function api_search_url_prev($query, $params = array()) {
-            $this->page -= 1;
-            $params['offset'] = ($this->page - 1) * $this->items_per_page;
-            return $this->api_search_url($query, $params);
-        }
-
-        function api_search_url_first($query, $params = array()) {
-            $this->page = 1;
-            $params['offset'] = ($this->page - 1) * $this->items_per_page;
-            return $this->api_search_url($query, $params);
-        }
-
-        function api_search_url_last($query, $params = array()) {
-            $this->page = $this->pages;
-            $params['offset'] = ($this->page - 1) * $this->items_per_page;
-            return $this->api_search_url($query, $params);
-        }
+//        function api_search_url_next($query, $params = array()) {
+//            $this->page += 1;
+//            $params['offset'] = ($this->page - 1) * $this->items_per_page;
+//            return $this->api_search_url($query, $params);
+//        }
+//
+//        function api_search_url_prev($query, $params = array()) {
+//            $this->page -= 1;
+//            $params['offset'] = ($this->page - 1) * $this->items_per_page;
+//            return $this->api_search_url($query, $params);
+//        }
+//
+//        function api_search_url_first($query, $params = array()) {
+//            $this->page = 1;
+//            $params['offset'] = ($this->page - 1) * $this->items_per_page;
+//            return $this->api_search_url($query, $params);
+//        }
+//
+//        function api_search_url_last($query, $params = array()) {
+//            $this->page = $this->pages;
+//            $params['offset'] = ($this->page - 1) * $this->items_per_page;
+//            return $this->api_search_url($query, $params);
+//        }
 
         function parse_result_set($response) : array {
             $response = json_decode($response);

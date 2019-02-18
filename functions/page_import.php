@@ -4,7 +4,7 @@ add_action('admin_menu', function () {
 
     add_menu_page('SHAP-Importer', 'SHAP-Import', 'administrator', SHAP_FILE, function () {
 
-        echo "<h2>Import to cache</h2>";
+        echo "<h2>Import Data</h2>";
 
         echo "<div class='wrap' id='shap-import'>";
 
@@ -21,7 +21,7 @@ add_action('admin_menu', function () {
             }
 
             echo "</select>";
-            echo "<input type='submit' class='button' value='ok'>";
+            echo "<input type='submit' class='button' value='OK'>";
 
         } else {
 
@@ -44,6 +44,8 @@ add_action('admin_menu', function () {
             if ($success) {
                 $items = $ds->pages * $ds->items_per_page;
                 echo "<strong>Import {$ds->pages} pages of data (about $items items)?</strong><br>";
+                $page = isset($_POST['shap_ds_page']) ? $_POST['shap_ds_page'] : 0;
+                echo "<label for='shap_ds_page'>Page</label><input type='text' name='shap_ds_page' value='$page' style='width: 3em'>";
                 echo "<div class='button' id='shap-import-start'>Start</div>";
 
             } else {
@@ -96,7 +98,9 @@ add_action('wp_ajax_shap_import_next_page', function() {
     }
     ob_end_flush();
 
-    if (!$ds->fetch()) {
+    $next = isset($_POST['shap_ds_page']) ? (int) $_POST['shap_ds_page'] : 0;
+
+    if (!$ds->fetch($next)) {
         echo json_encode(array(
             "success" => false,
             "message" => implode(",", $ds->errors)
@@ -108,11 +112,12 @@ add_action('wp_ajax_shap_import_next_page', function() {
     $results = count($ds->results) - count($warnings);
     $results_all = count($ds->results);
     $list = implode("</li>\n<li>", $ds->results);
+    $page = $ds->page - 1;
 
     echo json_encode(array(
         "success" => true,
         "warnings" => $warnings,
-        "message" => "<strong>Page {$ds->page} successfully fetched, $results/$results_all items added.</strong><ul><li>$list</li></ul>",
+        "message" => "<strong>Page $page successfully fetched, $results/$results_all items added.</strong><ul><li>$list</li></ul>",
         "results" => $results,
         "page" => $ds->page,
         "url" => $ds->last_fetched_url
