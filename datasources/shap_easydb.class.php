@@ -156,10 +156,81 @@ namespace shap_datasource {
                 throw new \Exception("No image section in object #$system_object_id");
             }
 
-            $title = $this->_parse_title($object, "Image #" . $system_object_id);
+            $attachment = $this->_create_or_update_attachment($object, $system_object_id);
 
-            // remove post if present
 
+//            $this->_parse_blocks($object, $data);
+//            $this->_parse_nested($object, $data);
+//            $this->_parse_date($object, $data);
+//            $this->_parse_pool($object, $data);
+//            $this->_parse_tags($json_response[0], $data);
+//
+//            list($lat, $lon) = $this->_parse_place($object, $data);
+//
+
+//
+//            $html = $image->render();
+//
+//            if (isset($object->copyright_vermerk) and is_string($object->copyright_vermerk)) {
+//                $html .= "<div class='esa_shap_subtext'>{$object->copyright_vermerk}</div>";
+//            } else if (isset($object->copyright_vermerk) and is_object($object->copyright_vermerk)) {
+//                $en = "en-US";
+//                $html .= "<div class='esa_shap_subtext'>{$object->copyright_vermerk->$en}</div>";
+//            }
+
+            return "<a href='/wp-admin/upload.php?item={$attachment->ID}'>Image {$attachment->ID} " . ($attachment->update ? 'updated' : 'inserted') . "</a>";
+        }
+
+        private function _create_or_update_attachment($object, int $system_object_id) {
+            $duplicate_id = $this->_get_post($system_object_id);
+            $image_title = $object->bild[0]->original_filename;
+            $image_info = $this->_get_best_image($object);
+            $file_path = $this->_download_image($image_info->url, "shap_import_$system_object_id.{$image_info->extension}");
+            $file_type = wp_check_filetype(basename($file_path), null);
+            $wp_upload_dir = wp_upload_dir();
+            $attachment = array(
+                'guid'           => $wp_upload_dir['url'] . '/' . basename($file_path),
+                'post_mime_type' => $file_type['type'],
+                'post_title'     => $this->_parse_title($object, $image_title),
+                'post_content'   => '',
+                'post_status'    => 'inherit'
+            );
+
+            if ($duplicate_id) {
+                $attachment["ID"] = $duplicate_id;
+            }
+
+            $attach_id = wp_insert_attachment($attachment, $file_path, 0, true);
+
+            if (is_wp_error($attach_id)) {
+                $errors = $attach_id->get_error_messages();
+                foreach ($errors as $error) {
+                    $this->error($error);
+                }
+                throw new \Exception("Wordpress Error: Could not create attachment for #$system_object_id: ");
+            }
+
+            require_once(ABSPATH . 'wp-admin/includes/image.php');
+
+            $attach_data = wp_generate_attachment_metadata($attach_id, $file_path);
+            wp_update_attachment_metadata($attach_id, $attach_data);
+            add_post_meta($attach_id, "_shap_easydb_id", $system_object_id, true);
+
+            return (object) array(
+                "update" => !!$duplicate_id,
+                "ID" => $attach_id
+            );
+        }
+
+        /**
+         * looks up if the image is already imported and if yes, return it's ID
+         * also checks if there are some copies of the image wich should not exist
+         *
+         * @param string $system_object_id
+         * @return bool|mixed
+         * @throws \Exception
+         */
+        private function _get_post(string $system_object_id) : int {
             $args = array(
                 'post_type' => 'attachment',
                 'meta_query' => array(
@@ -190,92 +261,35 @@ namespace shap_datasource {
                 }
             }
 
-            $versions = array_filter((array) $object->bild[0]->versions, function($v) {
-                return  ($v->status !== "failed") && (!$v->_not_allowed);
+            return $duplicate ? $duplicate->ID : 0;
+        }
+
+        private function _get_best_image($o) {
+            $versions = array_filter((array) $o->bild[0]->versions, function ($v) {
+                return ($v->status !== "failed") && (!$v->_not_allowed);
             });
 
             if (isset($versions['full'])) {
                 $v = 'full';
             } else if (isset($versions['original'])) {
                 $v = 'original';
-            } else
-                if (isset($versions['small'])) {
+            } else if (isset($versions['small'])) {
                 $v = 'small';
             } else {
-                throw new \Exception("Could not fetch Image #$system_object_id (no version available)");
+                throw new \Exception("Could not fetch Image (no version available)");
             }
 
-            $image_title = $object->bild[0]->original_filename;
-            $r = md5(time());
-            $file_path = $this->_download_image($versions[$v]->url, "shap_import_$system_object_id.$r.{$versions[$v]->extension}");
-            $file_type = wp_check_filetype(basename($file_path), null);
-            $wp_upload_dir = wp_upload_dir();
-            $attachment = array(
-                'guid'           => $wp_upload_dir['url'] . '/' . basename($file_path),
-                'post_mime_type' => $file_type['type'],
-                'post_title'     => $this->_parse_title($object, $image_title),
-                'post_content'   => '',
-                'post_status'    => 'inherit'
-            );
-
-            if ($duplicate) {
-                if (!update_attached_file($duplicate->ID, $file_path)) {
-                    throw new \Exception("Wordpress Error: Could not update attachment file for #$system_object_id: {$duplicate->ID}");
-                }
-                $attachment["ID"] = $duplicate->ID;
-            }
-
-            $attach_id = wp_insert_attachment($attachment, $file_path, 0, true);
-
-            if (is_wp_error($attach_id)) {
-                $errors = $attach_id->get_error_messages();
-                foreach ($errors as $error) {
-                    $this->error($error);
-                }
-                throw new \Exception("Wordpress Error: Could not create attachment for #$system_object_id: ");
-            }
-
-            require_once(ABSPATH . 'wp-admin/includes/image.php');
-
-            $attach_data = wp_generate_attachment_metadata($attach_id, $file_path);
-            wp_update_attachment_metadata($attach_id, $attach_data);
-            add_post_meta($attach_id, "_shap_easydb_id", $system_object_id, true);
-
-
-//            $this->_parse_blocks($object, $data);
-//            $this->_parse_nested($object, $data);
-//            $this->_parse_date($object, $data);
-//            $this->_parse_pool($object, $data);
-//            $this->_parse_tags($json_response[0], $data);
-//
-//            list($lat, $lon) = $this->_parse_place($object, $data);
-//
-
-//
-//            $html = $image->render();
-//
-//            if (isset($object->copyright_vermerk) and is_string($object->copyright_vermerk)) {
-//                $html .= "<div class='esa_shap_subtext'>{$object->copyright_vermerk}</div>";
-//            } else if (isset($object->copyright_vermerk) and is_object($object->copyright_vermerk)) {
-//                $en = "en-US";
-//                $html .= "<div class='esa_shap_subtext'>{$object->copyright_vermerk->$en}</div>";
-//            }
-
-            return "<a href='/wp-admin/upload.php?item={$attach_id}'>Image " . ($duplicate ? 'updated' : 'inserted') . "</a>";
+            return $versions[$v];
         }
 
 
-        private function _x($attachment_id, $file) {
-            if (!_wp_relative_upload_path($file)) {
-                throw new Exception("NO RELATIVE PATH");
-            }
-		    return update_post_meta( $attachment_id, '_wp_attached_file', $file );
-        }
-
+        /**
+         * @param $url
+         * @param $filename
+         * @return string
+         * @throws \Exception
+         */
         private function _download_image($url, $filename) : string {
-            set_time_limit(0);
-            ini_set("memory_limit",-1); // TODO increase memory reasonable!
-
             $wp_upload_dir = wp_upload_dir();
             $ch = curl_init($url);
             $filepath = $wp_upload_dir['path'] . '/' . $filename;
