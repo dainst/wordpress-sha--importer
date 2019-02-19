@@ -90,7 +90,12 @@ namespace shap_datasource {
             $search = array(
                 "limit" => $this->items_per_page,
                 "objecttypes" => array("bilder"),
-	            "generate_rights" => false
+	            "generate_rights" => false,
+                "sort" => array(
+                    array(
+                        "field" =>"_system_object_id"
+                    )
+                )
             );
 
             //            if (!in_array($query, array("", "*"))) {
@@ -113,30 +118,6 @@ namespace shap_datasource {
                 'post_json' => $search
             );
         }
-
-//        function api_search_url_next($query, $params = array()) {
-//            $this->page += 1;
-//            $params['offset'] = ($this->page - 1) * $this->items_per_page;
-//            return $this->api_search_url($query, $params);
-//        }
-//
-//        function api_search_url_prev($query, $params = array()) {
-//            $this->page -= 1;
-//            $params['offset'] = ($this->page - 1) * $this->items_per_page;
-//            return $this->api_search_url($query, $params);
-//        }
-//
-//        function api_search_url_first($query, $params = array()) {
-//            $this->page = 1;
-//            $params['offset'] = ($this->page - 1) * $this->items_per_page;
-//            return $this->api_search_url($query, $params);
-//        }
-//
-//        function api_search_url_last($query, $params = array()) {
-//            $this->page = $this->pages;
-//            $params['offset'] = ($this->page - 1) * $this->items_per_page;
-//            return $this->api_search_url($query, $params);
-//        }
 
         function parse_result_set($response, bool $test = false) : array {
             $response = $this->_json_decode($response);
@@ -168,51 +149,97 @@ namespace shap_datasource {
             $object = $json_response[0]->{$object_type};
 
             if ($object_type !== "bilder") {
-                $this->error("Object $system_object_id is not from Bilder!");
-                return false;
+                throw new \Exception("Object $system_object_id is not from Bilder!");
+            }
+
+            if (!isset($object->bild) or !isset($object->bild[0]->versions)) {
+                throw new \Exception("No image section in object #$system_object_id");
             }
 
             $title = $this->_parse_title($object, "Image #" . $system_object_id);
 
-            // images
-            if (isset($object->bild) and isset($object->bild[0]->versions)) {
+            // remove post if present
 
-                $versions = array_filter((array) $object->bild[0]->versions, function($v) {
-                    return  ($v->status !== "failed") && (!$v->_not_allowed);
-                });
+            $args = array(
+                'post_type' => 'attachment',
+                'meta_query' => array(
+                    array(
+                        'key' => '_shap_easydb_id',
+                        'value' => (string) $system_object_id,
+                        'compare' => '='
+                    ),
+                    array(
+                        'key' => '_shap_easydb_id',
+                        'value' => (string) $system_object_id,
+                        'compare' => '='
+                    )
+                )
+            );
 
-//                if (isset($versions['full'])) {
-//                    $v = 'full';
-//                } else if (isset($versions['original'])) {
-//                    $v = 'original';
-//                } else
-                    if (isset($versions['small'])) {
-                    $v = 'small';
-                } else {
-                    throw new \Exception("Could not fetch Image #$system_object_id (no version available)");
+            $possible_duplicates = get_posts($args);
+
+            $duplicate = count($possible_duplicates) ? array_pop($possible_duplicates) : false;
+
+            if (count($possible_duplicates)) {
+                foreach ($possible_duplicates as $illegal_duplicate) {
+                    $this->error("Post {$illegal_duplicate->ID} is an illegal duplicate and get deleted");
+                    if (false === wp_delete_post($illegal_duplicate->ID, true)) {
+                        throw new \Exception("Illegal duplicate {$illegal_duplicate->ID} could not be deleted");
+                    }
+
                 }
-
-                $image_title = $object->bild[0]->original_filename;
-                $filename = $this->_download_image($versions[$v]->url, "shap_import_$system_object_id.{$versions[$v]->extension}");
-                $filetype = wp_check_filetype(basename($filename), null);
-                $wp_upload_dir = wp_upload_dir();
-                $attachment = array(
-                    'guid'           => $wp_upload_dir['url'] . '/' . basename($filename),
-                    'post_mime_type' => $filetype['type'],
-                    'post_title'     => "$title | $image_title",
-                    'post_content'   => '',
-                    'post_status'    => 'inherit'
-                );
-
-                $attach_id = wp_insert_attachment($attachment, $filename);
-
-                require_once(ABSPATH . 'wp-admin/includes/image.php');
-
-                $attach_data = wp_generate_attachment_metadata($attach_id, $filename);
-                wp_update_attachment_metadata($attach_id, $attach_data);
-
             }
 
+            $versions = array_filter((array) $object->bild[0]->versions, function($v) {
+                return  ($v->status !== "failed") && (!$v->_not_allowed);
+            });
+
+            if (isset($versions['full'])) {
+                $v = 'full';
+            } else if (isset($versions['original'])) {
+                $v = 'original';
+            } else
+                if (isset($versions['small'])) {
+                $v = 'small';
+            } else {
+                throw new \Exception("Could not fetch Image #$system_object_id (no version available)");
+            }
+
+            $image_title = $object->bild[0]->original_filename;
+            $r = md5(time());
+            $file_path = $this->_download_image($versions[$v]->url, "shap_import_$system_object_id.$r.{$versions[$v]->extension}");
+            $file_type = wp_check_filetype(basename($file_path), null);
+            $wp_upload_dir = wp_upload_dir();
+            $attachment = array(
+                'guid'           => $wp_upload_dir['url'] . '/' . basename($file_path),
+                'post_mime_type' => $file_type['type'],
+                'post_title'     => $this->_parse_title($object, $image_title),
+                'post_content'   => '',
+                'post_status'    => 'inherit'
+            );
+
+            if ($duplicate) {
+                if (!update_attached_file($duplicate->ID, $file_path)) {
+                    throw new \Exception("Wordpress Error: Could not update attachment file for #$system_object_id: {$duplicate->ID}");
+                }
+                $attachment["ID"] = $duplicate->ID;
+            }
+
+            $attach_id = wp_insert_attachment($attachment, $file_path, 0, true);
+
+            if (is_wp_error($attach_id)) {
+                $errors = $attach_id->get_error_messages();
+                foreach ($errors as $error) {
+                    $this->error($error);
+                }
+                throw new \Exception("Wordpress Error: Could not create attachment for #$system_object_id: ");
+            }
+
+            require_once(ABSPATH . 'wp-admin/includes/image.php');
+
+            $attach_data = wp_generate_attachment_metadata($attach_id, $file_path);
+            wp_update_attachment_metadata($attach_id, $attach_data);
+            add_post_meta($attach_id, "_shap_easydb_id", $system_object_id, true);
 
 
 //            $this->_parse_blocks($object, $data);
@@ -234,9 +261,16 @@ namespace shap_datasource {
 //                $html .= "<div class='esa_shap_subtext'>{$object->copyright_vermerk->$en}</div>";
 //            }
 
-            return $filename;
+            return "<a href='/wp-admin/upload.php?item={$attach_id}'>Image " . ($duplicate ? 'updated' : 'inserted') . "</a>";
         }
 
+
+        private function _x($attachment_id, $file) {
+            if (!_wp_relative_upload_path($file)) {
+                throw new Exception("NO RELATIVE PATH");
+            }
+		    return update_post_meta( $attachment_id, '_wp_attached_file', $file );
+        }
 
         private function _download_image($url, $filename) : string {
             set_time_limit(0);
@@ -265,14 +299,19 @@ namespace shap_datasource {
         }
 
         function _parse_title($o, $default) : string {
-            $en = "en-US";
-            if (isset($o->ueberschrift)) {
-                return $o->ueberschrift->$en;
-            } else if (isset($o->titel)) {
-                return $o->titel->$en;
-            } else if (isset($o->beschreibung)) {
-                return $o->beschreibung->$en;
+            $languages = array("en-US", "de-DE", "ar");
+            $fields = array('ueberschrift', 'titel', 'beschreibung');
+
+            foreach ($fields as $field) {
+                if (isset($o->$field)) {
+                    foreach ($languages as $language) {
+                        if (isset($o->$field->$language) and $o->$field->$language) {
+                            return $o->$field->$language;
+                        }
+                    }
+                }
             }
+
             return $default;
         }
 
