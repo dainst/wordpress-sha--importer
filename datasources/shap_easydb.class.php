@@ -216,6 +216,8 @@ namespace shap_datasource {
             wp_update_attachment_metadata($attach_id, $attach_data);
             add_post_meta($attach_id, "_shap_easydb_id", $system_object_id, true);
 
+            $this->_do_multilanguage_stuff($attach_id);
+
             return (object) array(
                 "update" => !!$duplicate_id,
                 "ID" => $attach_id
@@ -447,6 +449,23 @@ namespace shap_datasource {
                 'file' => plugins_url(ESA_DIR . '/plugins/shap_easydb/esa_shap.css'),
                 'name' => "shap"
             );
+        }
+
+        private function _do_multilanguage_stuff($post_id) {
+            require_once(realpath(plugin_dir_path(__FILE__) . '/../../sitepress-multilingual-cms/inc/wpml-api.php'));
+            $trans = wpml_get_content_translations("post_attachment", $post_id);
+            throw new \Exception($post_id . shap_debug($trans));
+            /**
+             * result:
+             * array(3) {
+            ["ar"]=>
+            string(3) "761"
+            ["de"]=>
+            string(3) "762"
+            ["en"]=>
+            string(3) "760"
+            }
+             */
         }
 
     }

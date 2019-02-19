@@ -47,7 +47,6 @@ add_action('admin_menu', function () {
                 $page = isset($_POST['shap_ds_page']) ? $_POST['shap_ds_page'] : 0;
                 echo "<label for='shap_ds_page'>Page</label><input type='text' name='shap_ds_page' value='$page' style='width: 4em'>";
                 echo "<div class='button' id='shap-import-start'>Start</div>";
-
             } else {
                 echo "<strong>Errors</strong><br>";
                 $ds->show_errors();
