@@ -2,7 +2,7 @@ var shap_i = {
 
     selected_ds: false,
     status: "idle",
-    states: ["idle", "running", "error", "finished", "aborted"],
+    states: ["idle", "running", "error", "finished", "aborted", "aborting"],
 
 
     import_next_page: function(page) {
@@ -11,6 +11,10 @@ var shap_i = {
 
         if (shap_i.status !== "running") {
             return;
+        }
+
+        if (shap_i.status === "aborting") {
+            shap_i.update_status("aborted");
         }
 
         jQuery('[name="shap_ds_page"]').val(page);
@@ -23,7 +27,7 @@ var shap_i = {
 
                 response = JSON.parse(response);
 
-                shap_i.log(response.message, response.success);
+                shap_i.log(response.message, response.success, response.log);
 
                 if (response.success) {
                     if (response.results) {
@@ -37,7 +41,7 @@ var shap_i = {
             },
             error: function(exception) {
                 console.warn(exception);
-                shap_i.log(exception, false);
+                shap_i.log(exception, false, array());
                 shap_i.update_status("error");
             }
         });
@@ -47,10 +51,11 @@ var shap_i = {
         console.log("start import");
         if (shap_i.status !== "running") {
             shap_i.update_status("running");
-            shap_i.import_next_page(jQuery('[name="shap_ds_page"]').val());
-            jQuery('[name="shap_ds_page"]').attr('readonly', true);
+            var shap_ds_page_input = jQuery('[name="shap_ds_page"]');
+            shap_i.import_next_page().val(shap_ds_page_input);
+            jQuery(shap_ds_page_input).attr('readonly', true);
         } else {
-            shap_i.update_status("aborted");
+            shap_i.update_status("aborting");
         }
     },
 
@@ -72,6 +77,12 @@ var shap_i = {
             startStopBtn.toggle(false);
             statusView.text("Error");
             statusView.addClass("error");
+        }
+
+        if (status === "aborting") {
+            startStopBtn.toggle(false);
+            statusView.text("Aborting");
+            statusView.addClass("notice notice-warning");
         }
 
         if (status === "aborted") {
@@ -101,21 +112,31 @@ var shap_i = {
         }
     },
 
-    log: function(msg, success) {
+    log: function(msg, success, log) {
         if (jQuery.isPlainObject(msg)) {
             msg = "[" + msg.status + "] " + msg.statusText;
         }
-        var entry = jQuery("<div>" + msg + "</div>");
+        var entry = jQuery("<div><strong>" + msg + "</strong></div>");
         entry.addClass(success ? 'notice notice-success' : 'error');
         jQuery('#shap-import-log').append(entry);
 
+        var logMap = {
+            "error": 'error',
+            "success": 'notice notice-success',
+            "info": "notice notice-info",
+            "debug": "notice notice-info"
+        };
+
+        log.forEach(function(item) {
+            var entry = jQuery("<div>" + item.msg + "</div>");
+            entry.addClass(logMap[item.type]);
+            jQuery('#shap-import-log').append(entry);
+        });
+
     }
-
-
 
 };
 
 jQuery(document).ready(function() {
-    console.log("hello");
     jQuery('body').on('click', '#shap-import-start',  shap_i.start_stop_import);
 });

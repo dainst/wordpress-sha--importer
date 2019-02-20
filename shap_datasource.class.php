@@ -19,7 +19,7 @@ namespace shap_datasource {
 
 		public $debug = false;
 
-		public $results = array();
+		protected $results = array();
 
 		// saves current search params
 		public $id;
@@ -30,8 +30,8 @@ namespace shap_datasource {
 		public $pages = false; // number of pages. false means: unknown
         public $items_per_page = 4;
 		
-		//error collector
-		public $errors = array();
+		// log collector
+		public $log = array();
 
 		// some settings
 		public $force_curl = false;
@@ -137,8 +137,18 @@ namespace shap_datasource {
 		 * @param string $error_text
 		 */
 		protected function error($error_text) {
-			$this->errors[] = $error_text;
+			$this->log[] = array('msg' => $error_text, 'type' => 'error');
 		}
+
+        protected function log($log_text, string $type = 'info') {
+            $this->log[] = array('msg' => $log_text, 'type' => $type);
+        }
+
+        protected function filter_log(string $type) : array {
+		    return array_filter($this->log, function($entry) use ($type) {
+		        return $entry['type'] == $type;
+            });
+        }
 
 
 		/**
@@ -147,8 +157,8 @@ namespace shap_datasource {
 		 */
 		function show_errors() {
 			echo "<div class='shap_error_list'>";
-			foreach ($this->errors as $error) {
-				echo "<div class='error'>$error</div>";
+			foreach ($this->log as $log_entry) {
+				echo "<div class='{$log_entry['type']}'>{$log_entry['msg']}</div>";
 			}
 			echo "</div>";
 		}
@@ -157,7 +167,7 @@ namespace shap_datasource {
 		 * if the functionality of the datasource relies onto something special like specific php libraries or external software,
 		 * you can implement a dependency check on wose result the availability in wordpress depends.
 		 * @return string
-		 * @throws Exception if not
+		 * @throws \Exception if not
 		 */
 		function dependency_check() : string {
 			return 'O. K.';
@@ -174,6 +184,20 @@ namespace shap_datasource {
                 function_exists("curl_close")
             );
         }
+
+        /**
+         * @param bool $only_success
+         * @return array
+         */
+        function get_results(bool $only_success = false) : array {
+            if ($only_success) {
+                return array_filter($this->results, function($entry) {
+                    return $entry !== null;
+                });
+            }
+		    return $this->results;
+        }
+
 
 		/**
 		 * fetches $data from url, using curl if possible, if not it uses file_get_contents

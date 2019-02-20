@@ -102,21 +102,19 @@ add_action('wp_ajax_shap_import_next_page', function() {
     if (!$ds->fetch($next)) {
         echo json_encode(array(
             "success" => false,
-            "message" => "<strong>Some Errors: </strong><ul><li>" . implode("</li><li>", $ds->errors) . "</li></ul>"
+            "message" => "Some Errors"
         ));
         wp_die();
     }
 
-    $warnings =  array(); //esa_cache_result($ds);
-    $results = count($ds->results) - count($warnings);
-    $results_all = count($ds->results);
-    $list = implode("</li>\n<li>", $ds->results);
+    $results = count($ds->get_results(true));
+    $results_all = count($ds->get_results());
     $page = $ds->page - 1;
 
     echo json_encode(array(
         "success" => true,
-        "warnings" => $warnings,
-        "message" => "<strong>Page $page successfully fetched, $results/$results_all items added.</strong><ul><li>$list</li></ul>",
+        "log" => $ds->log,
+        "message" => "Page $page successfully fetched, $results/$results_all items added.",
         "results" => $results,
         "page" => $ds->page,
         "url" => $ds->last_fetched_url

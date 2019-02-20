@@ -3,8 +3,6 @@
 
 namespace shap_datasource {
 
-    use mysql_xdevapi\Exception;
-
     class shap_easydb extends abstract_datasource {
 
         public $debug = false;
@@ -17,12 +15,23 @@ namespace shap_datasource {
         private $_easydb_user = "";
         private $_easydb_pass = "";
 
+        /**
+         * shap_easydb constructor.
+         */
         function __construct() {
             $this->_easydb_url  = get_option('shap_db_url');
             $this->_easydb_user = get_option('shap_db_user');
             $this->_easydb_pass = get_option('shap_db_pass');
+
+            require_once(ABSPATH . 'wp-admin/includes/image.php');
+
+            require_once(realpath(plugin_dir_path(__FILE__) . '/../../sitepress-multilingual-cms/inc/wpml-api.php'));
         }
 
+        /**
+         * @return string
+         * @throws \Exception
+         */
         function dependency_check() : string {
             if (!$this->check_for_curl()) {
                 throw new \Exception('PHP Curl extension not installed');
@@ -31,6 +40,10 @@ namespace shap_datasource {
             return 'O. K.';
         }
 
+        /**
+         * @param $msg
+         * @return string
+         */
         function parse_error_response($msg) : string {
             $json_msg = json_decode($msg);
             if (is_object($json_msg)) {
@@ -39,6 +52,10 @@ namespace shap_datasource {
             return $msg;
         }
 
+        /**
+         * @return string
+         * @throws \Exception
+         */
         function get_easy_db_session_token() : string {
             if ($this->_session_token) {
                 return $this->_session_token;
@@ -70,19 +87,39 @@ namespace shap_datasource {
             return $this->_session_token;
         }
 
+        /**
+         * @param $object_id
+         * @param array $params
+         * @return string
+         * @throws \Exception
+         */
         function api_single_url($object_id, $params = array()) : string {
             $this->get_easy_db_session_token();
             return "{$this->_easydb_url}/api/v1/db/bilder/bilder__all_fields/global_object_id/$object_id@local?token={$this->_session_token}";
         }
 
+        /**
+         * @param $object_id
+         * @return string
+         */
         function api_place_url($object_id) {
             return "{$this->_easydb_url}/api/v1/db/ortsthesaurus/ortsthesaurus__l/global_object_id/$object_id@local?token={$this->_session_token}";
         }
 
+        /**
+         * @param $id
+         * @param array $params
+         * @return string
+         */
         function api_record_url($id, $params = array()) : string {
             return "{$this->_easydb_url}/lists/bilder/id";
         }
 
+        /**
+         * @param int $page
+         * @return object
+         * @throws \Exception
+         */
         function api_fetch_url(int $page = 0) {
 
             $this->get_easy_db_session_token();
@@ -119,6 +156,11 @@ namespace shap_datasource {
             );
         }
 
+        /**
+         * @param array|object $response
+         * @param bool $test
+         * @return array
+         */
         function parse_result_set($response, bool $test = false) : array {
             $response = $this->_json_decode($response);
 
@@ -129,18 +171,26 @@ namespace shap_datasource {
                 return array();
             }
 
-            $this->results = array();
+            $results = array();
             foreach ($response->objects as $item) {
                 try {
-                    $this->results[] = $this->parse_result($this->_fetch_external_data($this->api_single_url($item->_system_object_id)));
+                    $result_id = $this->parse_result($this->_fetch_external_data($this->api_single_url($item->_system_object_id)));
+                    $results[] = $result_id;
+                    $this->log("Successfull created post for {$item->_system_object_id} : $result_id.", "success");
                 } catch (\Exception $e) {
-                    $this->error($e->getMessage());
+                    $results[] = null;
+                    $this->error("Error importing #{$item->_system_object_id}:" . $e->getMessage());
                 }
             }
 
-            return $this->results;
+            return $results;
         }
 
+        /**
+         * @param $response
+         * @return string
+         * @throws \Exception
+         */
         function parse_result($response) {
 
             $json_response = $this->_json_decode($response);
@@ -181,9 +231,15 @@ namespace shap_datasource {
             return "<a href='/wp-admin/upload.php?item={$attachment->ID}'>Image {$attachment->ID} " . ($attachment->update ? 'updated' : 'inserted') . "</a>";
         }
 
+        /**
+         * @param $object
+         * @param int $system_object_id
+         * @return object
+         * @throws \Exception
+         */
         private function _create_or_update_attachment($object, int $system_object_id) {
             $duplicate_id = $this->_get_post($system_object_id);
-            $image_title = $object->bild[0]->original_filename;
+            //$image_title = $object->bild[0]->original_filename;
             $image_info = $this->_get_best_image($object);
             $file_path = $this->_download_image($image_info->url, "shap_import_$system_object_id.{$image_info->extension}");
             $file_type = wp_check_filetype(basename($file_path), null);
@@ -191,7 +247,7 @@ namespace shap_datasource {
             $attachment = array(
                 'guid'           => $wp_upload_dir['url'] . '/' . basename($file_path),
                 'post_mime_type' => $file_type['type'],
-                'post_title'     => $this->_parse_title($object, $image_title),
+                'post_title'     => "[temporary title for #$system_object_id]",
                 'post_content'   => '',
                 'post_status'    => 'inherit'
             );
@@ -202,21 +258,15 @@ namespace shap_datasource {
 
             $attach_id = wp_insert_attachment($attachment, $file_path, 0, true);
 
-            if (is_wp_error($attach_id)) {
-                $errors = $attach_id->get_error_messages();
-                foreach ($errors as $error) {
-                    $this->error($error);
-                }
+            if ($this->_is_error($attach_id)) {
                 throw new \Exception("Wordpress Error: Could not create attachment for #$system_object_id: ");
             }
-
-            require_once(ABSPATH . 'wp-admin/includes/image.php');
 
             $attach_data = wp_generate_attachment_metadata($attach_id, $file_path);
             wp_update_attachment_metadata($attach_id, $attach_data);
             add_post_meta($attach_id, "_shap_easydb_id", $system_object_id, true);
 
-            $this->_do_multilanguage_stuff($attach_id);
+            $this->_update_translations($attach_id, $object, $system_object_id);
 
             return (object) array(
                 "update" => !!$duplicate_id,
@@ -266,6 +316,11 @@ namespace shap_datasource {
             return $duplicate ? $duplicate->ID : 0;
         }
 
+        /**
+         * @param $o
+         * @return mixed
+         * @throws \Exception
+         */
         private function _get_best_image($o) {
             $versions = array_filter((array) $o->bild[0]->versions, function ($v) {
                 return ($v->status !== "failed") && (!$v->_not_allowed);
@@ -314,17 +369,11 @@ namespace shap_datasource {
             return $result ? $filepath : "";
         }
 
-        function _parse_title($o, $default) : string {
-            $languages = array("en-US", "de-DE", "ar");
-            $fields = array('ueberschrift', 'titel', 'beschreibung');
+        function _parse_fields($o, string $language, array $fields, string $default) : string {
 
             foreach ($fields as $field) {
-                if (isset($o->$field)) {
-                    foreach ($languages as $language) {
-                        if (isset($o->$field->$language) and $o->$field->$language) {
-                            return $o->$field->$language;
-                        }
-                    }
+                if (isset($o->$field) and isset($o->$field->$language) and $o->$field->$language) {
+                    return $o->$field->$language;
                 }
             }
 
@@ -444,17 +493,39 @@ namespace shap_datasource {
 
         }
 
-        function stylesheet() {
-            return array(
-                'file' => plugins_url(ESA_DIR . '/plugins/shap_easydb/esa_shap.css'),
-                'name' => "shap"
-            );
-        }
 
-        private function _do_multilanguage_stuff($post_id) {
-            require_once(realpath(plugin_dir_path(__FILE__) . '/../../sitepress-multilingual-cms/inc/wpml-api.php'));
-            $trans = wpml_get_content_translations("post_attachment", $post_id);
-            throw new \Exception($post_id . shap_debug($trans));
+        /**
+         * @param int $post_id
+         * @param $object
+         * @param int $system_object_id
+         * @throws \Exception
+         */
+        private function _update_translations(int $post_id, $object, int $system_object_id) {
+
+            $translated_posts = wpml_get_content_translations("post_attachment", $post_id);
+
+            $language_map = array(
+                'ar' => 'ar',
+                'de' => "de-DE",
+                'en' => "en-US"
+            );
+
+            foreach ($translated_posts as $wpml_language => $translated_post_id) {
+                $new_post = array(
+                    'ID'             => $translated_post_id,
+                    'post_title'     => $this->_parse_fields($object, $language_map[$wpml_language], $fields = array('ueberschrift', 'titel'), "Image #$system_object_id ($wpml_language)"),
+                    'post_content'   => $this->_parse_fields($object, $language_map[$wpml_language], $fields = array('beschreibung'), ""),
+                    'post_type'      => "attachment"
+                );
+                $id = wp_insert_post($new_post, true);
+                if ( $this->_is_error($id)) {
+                    throw new \Exception("Wordpress Error: Could not create attachment.");
+                }
+                $this->log("Image #$system_object_id: Translation to <i>$wpml_language</i> of $post_id is $id");
+            }
+
+
+
             /**
              * result:
              * array(3) {
@@ -466,6 +537,21 @@ namespace shap_datasource {
             string(3) "760"
             }
              */
+        }
+
+        /**
+         * @param \WP_Error | object | array $something
+         * @return bool
+         */
+        private function _is_error($something) {
+            if (is_wp_error($something)) {
+                $errors = $something->get_error_messages();
+                foreach ($errors as $error) {
+                    $this->error($error);
+                }
+                return true;
+            }
+            return false;
         }
 
     }
