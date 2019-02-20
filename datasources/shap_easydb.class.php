@@ -208,6 +208,13 @@ namespace shap_datasource {
 
             $attachment = $this->_create_or_update_attachment($object, $system_object_id);
 
+            $meta = array(
+                'ar' => array(),
+                'de-DE' => array(),
+                'en-US' => array()
+            );
+
+            $this->_parse_place($object, $meta);
 
 //            $this->_parse_blocks($object, $data);
 //            $this->_parse_nested($object, $data);
@@ -215,9 +222,8 @@ namespace shap_datasource {
 //            $this->_parse_pool($object, $data);
 //            $this->_parse_tags($json_response[0], $data);
 //
-//            list($lat, $lon) = $this->_parse_place($object, $data);
 //
-
+            $this->_update_translations($attachment->ID, $object, $system_object_id, $meta);
 //
 //            $html = $image->render();
 //
@@ -265,8 +271,6 @@ namespace shap_datasource {
             $attach_data = wp_generate_attachment_metadata($attach_id, $file_path);
             wp_update_attachment_metadata($attach_id, $attach_data);
             add_post_meta($attach_id, "_shap_easydb_id", $system_object_id, true);
-
-            $this->_update_translations($attach_id, $object, $system_object_id);
 
             return (object) array(
                 "update" => !!$duplicate_id,
@@ -445,10 +449,17 @@ namespace shap_datasource {
             }
         }
 
-        function _parse_place($o, \esa_item\data $data) : array {
+        /**
+         * @param $o
+         * @param array $meta
+         * @throws \Exception
+         */
+        function _parse_place($o, array &$meta)  {
+
+            $this->log("parsing place", "info");
 
             if (!isset($o->ort_des_motivs_id)) {
-                return array(null, null);
+                return;
             }
 
             $soid = $o->ort_des_motivs_id->_system_object_id;
@@ -458,20 +469,27 @@ namespace shap_datasource {
             $place = $place[0];
 
             if (!isset($place) or !isset($place->ortsthesaurus) or !isset($place->ortsthesaurus->gazetteer_id)) {
-                return array(null, null);
+                return;
             }
 
             $gazId = $place->ortsthesaurus->gazetteer_id;
 
-            foreach ($gazId->otherNames as $name) {
-                $data->put("place", $name->title, "#");
-            }
+            //            foreach ($gazId->otherNames as $name) { TODO translatable names?
+            //                $data->put("place", $name->title, "#");
+            //            }
 
             if (!isset($gazId->position)) {
-                return array(null, null);
+                return;
             }
 
-            return array($gazId->position->lat, $gazId->position->lng);
+            foreach ($meta as $lang => $lang_mata) {
+                $meta[$lang]["latitude"]       =   $gazId->position->lat;
+                $meta[$lang]["longitude"]      =   $gazId->position->lng;
+                $meta[$lang]["gazetteer_id"]   =   $gazId->gazId;
+                $meta[$lang]["place_name"]     =   $gazId->displayName;
+            }
+
+
         }
 
         function _parse_tags($o, \esa_item\data $data) {
@@ -493,14 +511,22 @@ namespace shap_datasource {
 
         }
 
+        private function _update_meta($post_id, $meta) {
+
+            foreach ($meta as $key => $value) {
+                add_post_meta($post_id, "shap_$key", $value, true);
+            }
+        }
+
 
         /**
          * @param int $post_id
          * @param $object
          * @param int $system_object_id
+         * @param array $meta
          * @throws \Exception
          */
-        private function _update_translations(int $post_id, $object, int $system_object_id) {
+        private function _update_translations(int $post_id, $object, int $system_object_id, array $meta) {
 
             $translated_posts = wpml_get_content_translations("post_attachment", $post_id);
 
@@ -522,21 +548,10 @@ namespace shap_datasource {
                     throw new \Exception("Wordpress Error: Could not create attachment.");
                 }
                 $this->log("Image #$system_object_id: Translation to <i>$wpml_language</i> of $post_id is $id");
+
+                $this->_update_meta($translated_post_id, $meta[$language_map[$wpml_language]]);
             }
 
-
-
-            /**
-             * result:
-             * array(3) {
-            ["ar"]=>
-            string(3) "761"
-            ["de"]=>
-            string(3) "762"
-            ["en"]=>
-            string(3) "760"
-            }
-             */
         }
 
         /**

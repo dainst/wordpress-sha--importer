@@ -7,15 +7,15 @@ var shap_i = {
 
     import_next_page: function(page) {
 
-        page = parseInt(page);
+        if (shap_i.status === "aborting") {
+            shap_i.update_status("aborted");
+        }
 
         if (shap_i.status !== "running") {
             return;
         }
 
-        if (shap_i.status === "aborting") {
-            shap_i.update_status("aborted");
-        }
+        page = parseInt(page);
 
         jQuery('[name="shap_ds_page"]').val(page);
 
@@ -41,7 +41,7 @@ var shap_i = {
             },
             error: function(exception) {
                 console.warn(exception);
-                shap_i.log(exception, false, array());
+                shap_i.log(exception, false, []);
                 shap_i.update_status("error");
             }
         });
@@ -52,7 +52,7 @@ var shap_i = {
         if (shap_i.status !== "running") {
             shap_i.update_status("running");
             var shap_ds_page_input = jQuery('[name="shap_ds_page"]');
-            shap_i.import_next_page().val(shap_ds_page_input);
+            shap_i.import_next_page(shap_ds_page_input.val());
             jQuery(shap_ds_page_input).attr('readonly', true);
         } else {
             shap_i.update_status("aborting");
