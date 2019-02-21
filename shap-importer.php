@@ -60,6 +60,7 @@ if (version_compare(phpversion(), '7', '<')) {
 require_once("functions/page_import.php");
 require_once("functions/page_settings.php");
 require_once("functions/datasources.php");
+require_once("functions/metabox.php");
 require_once("shap_datasource.class.php");
 
 
