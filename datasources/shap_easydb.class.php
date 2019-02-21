@@ -215,16 +215,19 @@ namespace shap_datasource {
             $attachment = $this->_create_or_update_attachment($object, $system_object_id);
 
             $meta = $this->_init_meta();
+            $tags = $this->_init_meta();
             $this->_parse_place($object, $meta);
-            $this->_parse_field($object, $meta, "copyright_vermerk");
+            $this->_parse_field($object->copyright_vermerk, $meta, "copyright_vermerk");
+            $this->_parse_nested($object, $tags);
 
 //            $this->_parse_blocks($object, $data);
-//            $this->_parse_nested($object, $data);
 //            $this->_parse_date($object, $data);
 //            $this->_parse_pool($object, $data);
 //            $this->_parse_tags($json_response[0], $data);
 
 //            $html = $image->render();
+
+            $this->_add_tags($attachment->ID, $tags);
 
             $this->_update_translations($attachment->ID, $object, $system_object_id, $meta);
 
@@ -242,12 +245,20 @@ namespace shap_datasource {
         /**
          * @param $object
          * @param array $meta
-         * @param string $field
+         * @param string $field_name
+         * @param bool $single
          */
-        private function _parse_field($object, array &$meta, string $field) {
+        private function _parse_field($object, array &$meta, string $field_name, bool $single = true) {
             foreach ($this->_language_map as $wp_language => $easydb_language) {
-                if (isset($object->$field->$easydb_language)) {
-                    $meta[$easydb_language][$field] = $object->$field->$easydb_language;
+                if (isset($object->$easydb_language)) {
+                    //$this->log("do add $field_name for $easydb_language. single: $single");
+                    if ($single) {
+                        $meta[$easydb_language][$field_name] = $object->$easydb_language;
+                    } else {
+                        if (!isset($meta[$easydb_language][$field_name])) $meta[$easydb_language][$field_name] = array();
+                        $meta[$easydb_language][$field_name][] = $object->$easydb_language;
+                    }
+
                 }
             }
         }
@@ -263,7 +274,7 @@ namespace shap_datasource {
             $duplicate_id = $this->_get_post($system_object_id);
             //$image_title = $object->bild[0]->original_filename;
             $image_info = $this->_get_best_image($object);
-            $file_path = $this->_download_image($image_info->url, "shap_import_$system_object_id.{$image_info->extension}");
+            $file_path = $this->download_image($image_info->url, "shap_import_$system_object_id.{$image_info->extension}");
             $file_type = wp_check_filetype(basename($file_path), null);
             $wp_upload_dir = wp_upload_dir();
             $attachment = array(
@@ -359,36 +370,6 @@ namespace shap_datasource {
             return $versions[$v];
         }
 
-
-        /**
-         * @param $url
-         * @param $filename
-         * @return string
-         * @throws \Exception
-         */
-        private function _download_image($url, $filename) : string {
-            $wp_upload_dir = wp_upload_dir();
-            $ch = curl_init($url);
-            $filepath = $wp_upload_dir['path'] . '/' . $filename;
-            $fp = fopen($filepath, 'w+');
-            curl_setopt($ch, CURLOPT_TIMEOUT, 300);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_HEADER, 0);
-            curl_setopt($ch, CURLOPT_FILE, $fp);
-            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-            $result = curl_exec($ch);
-            $error = curl_errno($ch);
-            fclose($fp);
-            curl_close($ch);
-            if($error) {
-                throw new \Exception('Curl Error: ' . $error);
-            }
-            if (!file_exists($filepath)) {
-                throw new \Exception("Something went wrong downloading $filepath");
-            }
-            return $result ? $filepath : "";
-        }
-
         /**
          * @param $o
          * @param string $language
@@ -407,15 +388,19 @@ namespace shap_datasource {
             return $default;
         }
 
-        function _parse_pool($o, \esa_item\data $data) {
-            if ($o->_pool->pool->_id == 1) {
-                return;
-            }
+//        function _parse_pool($o, \esa_item\data $data) {
+//            if ($o->_pool->pool->_id == 1) {
+//                return;
+//            }
+//
+//            $data->putMultilang("pool", (array) $o->_pool->pool->name);
+//        }
 
-            $data->putMultilang("pool", (array) $o->_pool->pool->name);
-        }
-
-        function _parse_nested($o, \esa_item\data $data) {
+        /**
+         * @param $o
+         * @param array $tags target
+         */
+        private function _parse_nested($o, array &$tags) {
 
             $to_parse = array(
                 "keyword"   =>  "schlagwort",
@@ -429,46 +414,53 @@ namespace shap_datasource {
                 $n = "_nested:bilder__$name";
                 $a = "lk_{$name}_id";
                 foreach ($o->$n as $keyword) {
-                    $this->_get_detail($data, $tag_type, $keyword->$a);
+                    $this->_parse_detail($keyword->$a, $tags, $tag_type, false);
                 }
             }
         }
 
-        function _parse_date($o, \esa_item\data $data) {
-            if (isset($o->original_datum)) {
-                $data->put("decade", $this->_get_decade($o->original_datum->_from));
-            } else if (isset($o->bild[0]->date_created)) {
-                if (isset($o->bild) and count($o->bild)) {
-                    $data->put("decade", $this->_get_decade($o->bild[0]->date_created));
-                }
-            }
-        }
+//        function _parse_date($o, \esa_item\data $data) {
+//            if (isset($o->original_datum)) {
+//                $data->put("decade", $this->_get_decade($o->original_datum->_from));
+//            } else if (isset($o->bild[0]->date_created)) {
+//                if (isset($o->bild) and count($o->bild)) {
+//                    $data->put("decade", $this->_get_decade($o->bild[0]->date_created));
+//                }
+//            }
+//        }
+//
+//        function _parse_blocks($o, \esa_item\data $data) {
+//            $blocks = array(
+//                "template"  => "art_der_vorlage_id",
+//                "state"     => "bearbeitungsstatus_id",
+//                "motive"    => "art_des_motivs_id_old",
+//                "place"     => "ort_des_motivs_id",
+//                "provider"  => "anbieter_id",
+//                "creator"   => "ersteller_der_vorlage_id_old",
+//                "material"  => "material_der_vorlage_id"
+//            );
+//
+//            foreach ($blocks as $bname => $block) {
+//                $this->get_detail($data, $bname, $o->$block);
+//            }
+//        }
 
-        function _parse_blocks($o, \esa_item\data $data) {
-            $blocks = array(
-                "template"  => "art_der_vorlage_id",
-                "state"     => "bearbeitungsstatus_id",
-                "motive"    => "art_des_motivs_id_old",
-                "place"     => "ort_des_motivs_id",
-                "provider"  => "anbieter_id",
-                "creator"   => "ersteller_der_vorlage_id_old",
-                "material"  => "material_der_vorlage_id"
-            );
+//        function _get_decade(string $datestring) {
+//            $year = date("Y", strtotime($datestring));
+//            return substr($year, 0, 3) . "0s";
+//        }
 
-            foreach ($blocks as $bname => $block) {
-                $this->_get_detail($data, $bname, $o->$block);
-            }
-        }
-
-        function _get_decade(string $datestring) {
-            $year = date("Y", strtotime($datestring));
-            return substr($year, 0, 3) . "0s";
-        }
-
-        function _get_detail($data, $name, $block, $field = "_standard") {
+        /**
+         * @param $block
+         * @param array $set
+         * @param string $name
+         * @param bool $single = true
+         * @param string $field = "_standard"
+         */
+        private function _parse_detail($block, array &$set, string $name, bool $single = true, string $field = "_standard") {
             $one = 1;
-            if (isset($block->$field) and isset($block->$field->$one)) {
-                $data->putMultilang($name, (array) $block->$field->$one->text);
+            if (isset($block->$field) and isset($block->$field->$one) and isset($block->$field->$one->text)) {
+                $this->_parse_field($block->$field->$one->text, $set, $name, $single);
             }
         }
 
@@ -557,8 +549,6 @@ namespace shap_datasource {
 
             $translated_posts = wpml_get_content_translations("post_attachment", $post_id);
 
-
-
             foreach ($translated_posts as $wpml_language => $translated_post_id) {
                 $new_post = array(
                     'ID'             => $translated_post_id,
@@ -590,6 +580,50 @@ namespace shap_datasource {
                 return true;
             }
             return false;
+        }
+
+        /**
+         * @param $post_id
+         * @param array $tag_array
+         * @throws \Exception
+         */
+        private function _add_tags($post_id, array $tag_array) {
+
+            $main_language = get_option("wpml-previous-default-language", "de");
+
+            $terms = array();
+            foreach ($this->_language_map as $wp_language => $easydb_language) {
+
+                if ($wp_language !== $main_language) {
+                    continue;
+                }
+
+                $tags = $tag_array[$easydb_language];
+
+                foreach ($tags as $tag_key => $tag_values) {
+
+                    if (!is_array($tag_values)) {
+                        $tag_values = array();
+                    }
+                    foreach ($tag_values as $tag_value) {
+                        $params = array();
+                        $params["description"] = "shap_imported";
+                        $term = wp_insert_term($tag_value, "shap_tags", $params);
+                        if (!$this->_is_error($term)) {
+                            $terms[] = $term['term_id'];
+                        }
+                    }
+
+                }
+
+            }
+            if (!count($terms)) {
+                return;
+            }
+            $inserted = wp_set_post_terms($post_id, $terms, "shap_tags", false);
+            if (!$inserted or $this->_is_error($inserted)) {
+                throw new \Exception("Could not insert Tags");
+            }
         }
 
     }

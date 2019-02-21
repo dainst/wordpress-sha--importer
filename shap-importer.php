@@ -61,6 +61,7 @@ require_once("functions/page_import.php");
 require_once("functions/page_settings.php");
 require_once("functions/datasources.php");
 require_once("functions/metabox.php");
+require_once("functions/keywords.php");
 require_once("functions/template_functions.php");
 require_once("shap_datasource.class.php");
 
@@ -70,7 +71,6 @@ require_once("datasources/shap_easydb.class.php");
 $shap_datasources = [
     'shap_easydb'
 ];
-
 
 function shap_debug($whatever, bool $echo = false) {
     ob_start();

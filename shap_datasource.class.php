@@ -28,7 +28,7 @@ namespace shap_datasource {
 		// pagination data
 		public $page = 1; //current page
 		public $pages = false; // number of pages. false means: unknown
-        public $items_per_page = 4;
+        public $items_per_page = 1;
 		
 		// log collector
 		public $log = array();
@@ -287,6 +287,35 @@ namespace shap_datasource {
 			
 			return $data;
 		}
+
+        /**
+         * @param $url
+         * @param $filename
+         * @return string
+         * @throws \Exception
+         */
+        function download_image($url, $filename) : string {
+            $wp_upload_dir = wp_upload_dir();
+            $ch = curl_init($url);
+            $filepath = $wp_upload_dir['path'] . '/' . $filename;
+            $fp = fopen($filepath, 'w+');
+            curl_setopt($ch, CURLOPT_TIMEOUT, 300);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_HEADER, 0);
+            curl_setopt($ch, CURLOPT_FILE, $fp);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+            $result = curl_exec($ch);
+            $error = curl_errno($ch);
+            fclose($fp);
+            curl_close($ch);
+            if($error) {
+                throw new \Exception('Curl Error: ' . $error);
+            }
+            if (!file_exists($filepath)) {
+                throw new \Exception("Something went wrong downloading $filepath");
+            }
+            return $result ? $filepath : "";
+        }
 
 		/**
 		 * json decode with error handling
