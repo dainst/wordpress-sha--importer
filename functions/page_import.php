@@ -122,21 +122,3 @@ add_action('wp_ajax_shap_import_next_page', function() {
 
     wp_die();
 });
-
-
-//
-//function esa_cache_result($ds) {
-//    $warnings = array();
-//    foreach ($ds->results as $result) {
-//
-//        if (get_class($result) == 'esa_item') {
-//            $result->store();
-//            esa_get_wrapper($result);
-//        } else {
-//            $warnings[] = esa_debug(get_class($result));
-//        }
-//    }
-//    return $warnings;
-//}
-
-
