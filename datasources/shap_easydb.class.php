@@ -218,8 +218,6 @@ namespace shap_datasource {
             $this->_parse_place($object, $meta);
             $this->_parse_field($object, $meta, "copyright_vermerk");
 
-            $this->log(shap_debug($meta));
-
 //            $this->_parse_blocks($object, $data);
 //            $this->_parse_nested($object, $data);
 //            $this->_parse_date($object, $data);
