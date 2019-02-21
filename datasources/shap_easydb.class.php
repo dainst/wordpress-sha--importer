@@ -15,6 +15,12 @@ namespace shap_datasource {
         private $_easydb_user = "";
         private $_easydb_pass = "";
 
+        private $_language_map = array(
+            'ar' => 'ar',
+            'de' => "de-DE",
+            'en' => "en-US"
+        );
+
         /**
          * shap_easydb constructor.
          */
@@ -112,7 +118,7 @@ namespace shap_datasource {
          * @return string
          */
         function api_record_url($id, $params = array()) : string {
-            return "{$this->_easydb_url}/lists/bilder/id";
+            return "{$this->_easydb_url}/lists/bilder/id/global_object_id/$id";
         }
 
         /**
@@ -208,34 +214,46 @@ namespace shap_datasource {
 
             $attachment = $this->_create_or_update_attachment($object, $system_object_id);
 
-            $meta = array(
-                'ar' => array(),
-                'de-DE' => array(),
-                'en-US' => array()
-            );
-
+            $meta = $this->_init_meta();
             $this->_parse_place($object, $meta);
+            $this->_parse_field($object, $meta, "copyright_vermerk");
+
+            $this->log(shap_debug($meta));
 
 //            $this->_parse_blocks($object, $data);
 //            $this->_parse_nested($object, $data);
 //            $this->_parse_date($object, $data);
 //            $this->_parse_pool($object, $data);
 //            $this->_parse_tags($json_response[0], $data);
-//
-//
-            $this->_update_translations($attachment->ID, $object, $system_object_id, $meta);
-//
+
 //            $html = $image->render();
-//
-//            if (isset($object->copyright_vermerk) and is_string($object->copyright_vermerk)) {
-//                $html .= "<div class='esa_shap_subtext'>{$object->copyright_vermerk}</div>";
-//            } else if (isset($object->copyright_vermerk) and is_object($object->copyright_vermerk)) {
-//                $en = "en-US";
-//                $html .= "<div class='esa_shap_subtext'>{$object->copyright_vermerk->$en}</div>";
-//            }
+
+            $this->_update_translations($attachment->ID, $object, $system_object_id, $meta);
 
             return "<a href='/wp-admin/upload.php?item={$attachment->ID}'>Image {$attachment->ID} " . ($attachment->update ? 'updated' : 'inserted') . "</a>";
         }
+
+        private function _init_meta() {
+            $meta = array();
+            foreach ($this->_language_map as $wp_language => $easydb_language) {
+                $meta[$easydb_language] = array();
+            }
+            return $meta;
+        }
+
+        /**
+         * @param $object
+         * @param array $meta
+         * @param string $field
+         */
+        private function _parse_field($object, array &$meta, string $field) {
+            foreach ($this->_language_map as $wp_language => $easydb_language) {
+                if (isset($object->$field->$easydb_language)) {
+                    $meta[$easydb_language][$field] = $object->$field->$easydb_language;
+                }
+            }
+        }
+
 
         /**
          * @param $object
@@ -373,7 +391,14 @@ namespace shap_datasource {
             return $result ? $filepath : "";
         }
 
-        function _parse_fields($o, string $language, array $fields, string $default) : string {
+        /**
+         * @param $o
+         * @param string $language
+         * @param array $fields
+         * @param string $default
+         * @return string
+         */
+        function _get_best_field($o, string $language, $fields, string $default = "") : string {
 
             foreach ($fields as $field) {
                 if (isset($o->$field) and isset($o->$field->$language) and $o->$field->$language) {
@@ -511,8 +536,12 @@ namespace shap_datasource {
 
         }
 
-        private function _update_meta($post_id, $meta) {
 
+        /**
+         * @param $post_id
+         * @param $meta
+         */
+        private function _update_meta($post_id, $meta) {
             foreach ($meta as $key => $value) {
                 add_post_meta($post_id, "shap_$key", $value, true);
             }
@@ -530,17 +559,13 @@ namespace shap_datasource {
 
             $translated_posts = wpml_get_content_translations("post_attachment", $post_id);
 
-            $language_map = array(
-                'ar' => 'ar',
-                'de' => "de-DE",
-                'en' => "en-US"
-            );
+
 
             foreach ($translated_posts as $wpml_language => $translated_post_id) {
                 $new_post = array(
                     'ID'             => $translated_post_id,
-                    'post_title'     => $this->_parse_fields($object, $language_map[$wpml_language], $fields = array('ueberschrift', 'titel'), "Image #$system_object_id ($wpml_language)"),
-                    'post_content'   => $this->_parse_fields($object, $language_map[$wpml_language], $fields = array('beschreibung'), ""),
+                    'post_title'     => $this->_get_best_field($object, $this->_language_map[$wpml_language], $fields = array('ueberschrift', 'titel'), "Image #$system_object_id ($wpml_language)"),
+                    'post_content'   => $this->_get_best_field($object, $this->_language_map[$wpml_language], $fields = array('beschreibung'), ""),
                     'post_type'      => "attachment"
                 );
                 $id = wp_insert_post($new_post, true);
@@ -549,7 +574,7 @@ namespace shap_datasource {
                 }
                 $this->log("Image #$system_object_id: Translation to <i>$wpml_language</i> of $post_id is $id");
 
-                $this->_update_meta($translated_post_id, $meta[$language_map[$wpml_language]]);
+                $this->_update_meta($translated_post_id, $meta[$this->_language_map[$wpml_language]]);
             }
 
         }
