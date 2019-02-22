@@ -5,11 +5,11 @@ add_action('init', function() {
         'shap_tags',
         'attachment',
         array(
-            'label'                 => 'SHAP Tags',
+            'label'                 => 'Tags',
             'rewrite'               => array('slug' => 'data'),
             'hierarchical'          => false,
             'show_ui'               => true,
-            'show_admin_column'     => true,
+            'show_admin_column'     => false,
             'query_var'             => true,
         )
     );
@@ -18,11 +18,11 @@ add_action('init', function() {
         'shap_places',
         'attachment',
         array(
-            'label'                 => 'SHAP Places',
+            'label'                 => 'Places',
             'rewrite'               => array('slug' => 'data'),
             'hierarchical'          => false,
             'show_ui'               => true,
-            'show_admin_column'     => true,
+            'show_admin_column'     => false,
             'query_var'             => true,
         )
     );
@@ -31,11 +31,11 @@ add_action('init', function() {
         'shap_time',
         'attachment',
         array(
-            'label'                 => 'SHAP Places',
+            'label'                 => 'Period',
             'rewrite'               => array('slug' => 'data'),
             'hierarchical'          => false,
             'show_ui'               => true,
-            'show_admin_column'     => true,
+            'show_admin_column'     => false,
             'query_var'             => true,
         )
     );
@@ -44,11 +44,11 @@ add_action('init', function() {
         'shap_theme',
         'attachment',
         array(
-            'label'                 => 'SHAP Theme',
+            'label'                 => 'Theme',
             'rewrite'               => array('slug' => 'data'),
             'hierarchical'          => false,
             'show_ui'               => true,
-            'show_admin_column'     => true,
+            'show_admin_column'     => false,
             'query_var'             => true,
         )
     );
@@ -57,11 +57,11 @@ add_action('init', function() {
         'shap_subject',
         'attachment',
         array(
-            'label'                 => 'SHAP Subject',
+            'label'                 => 'Subject',
             'rewrite'               => array('slug' => 'data'),
             'hierarchical'          => false,
             'show_ui'               => true,
-            'show_admin_column'     => true,
+            'show_admin_column'     => false,
             'query_var'             => true,
         )
     );
@@ -70,11 +70,11 @@ add_action('init', function() {
         'shap_pool',
         'attachment',
         array(
-            'label'                 => 'SHAP Pool',
+            'label'                 => 'Pool',
             'rewrite'               => array('slug' => 'data'),
             'hierarchical'          => false,
             'show_ui'               => true,
-            'show_admin_column'     => true,
+            'show_admin_column'     => false,
             'query_var'             => true,
         )
     );
