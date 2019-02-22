@@ -6,6 +6,11 @@ add_action('admin_menu', function () {
 
         echo "<h2>Import Data</h2>";
 
+        if (defined("SHAP_BLOCKED") and SHAP_BLOCKED) {
+            echo "<div>Under construction</div>";
+            return;
+        }
+
         echo "<div class='wrap' id='shap-import'>";
 
         echo "<form id='shap-import-form' method='post'>";
