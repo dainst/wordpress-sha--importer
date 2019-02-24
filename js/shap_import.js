@@ -116,9 +116,6 @@ var shap_i = {
         if (jQuery.isPlainObject(msg)) {
             msg = "[" + msg.status + "] " + msg.statusText;
         }
-        var entry = jQuery("<div><strong>" + msg + "</strong></div>");
-        entry.addClass(success ? 'notice notice-success' : 'error');
-        jQuery('#shap-import-log').append(entry);
 
         var logMap = {
             "error": 'error',
@@ -132,6 +129,10 @@ var shap_i = {
             entry.addClass(logMap[item.type]);
             jQuery('#shap-import-log').append(entry);
         });
+
+        var entry = jQuery("<div><strong>" + msg + "</strong></div>");
+        entry.addClass(success ? 'notice notice-success' : 'error');
+        jQuery('#shap-import-log').append(entry);
 
     }
 
