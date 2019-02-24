@@ -3,6 +3,8 @@
 
 namespace shap_datasource {
 
+    use mysql_xdevapi\Exception;
+
     class shap_easydb extends abstract_datasource {
 
         public $debug = false;
@@ -32,6 +34,8 @@ namespace shap_datasource {
             require_once(ABSPATH . 'wp-admin/includes/image.php');
 
             require_once(realpath(plugin_dir_path(__FILE__) . '/../../sitepress-multilingual-cms/inc/wpml-api.php'));
+
+            $this->_set_primary_language_first();
         }
 
         /**
@@ -182,7 +186,7 @@ namespace shap_datasource {
                 try {
                     $result_id = $this->parse_result($this->_fetch_external_data($this->api_single_url($item->_system_object_id)));
                     $results[] = $result_id;
-                    $this->log("Successfull created post for {$item->_system_object_id} : $result_id.", "success");
+                    $this->log("Successfull created post for #{$item->_system_object_id} : $result_id.", "success");
                 } catch (\Exception $e) {
                     $results[] = null;
                     $this->error("Error importing #{$item->_system_object_id}:" . $e->getMessage());
@@ -215,7 +219,7 @@ namespace shap_datasource {
             $attachment = $this->_create_or_update_attachment($object, $system_object_id);
 
             $meta = $this->_init_meta();
-            $tags = $this->_init_meta();
+            $tags = $this->_init_tags();
             $this->_parse_place($object, $meta);
             $this->_parse_field($object->copyright_vermerk, $meta, "copyright_vermerk");
             $this->_parse_nested($object, $tags);
@@ -227,9 +231,9 @@ namespace shap_datasource {
 
 //            $html = $image->render();
 
-            $this->_add_tags($attachment->ID, $tags);
+            $wp_terms = $this->_add_terms($attachment->ID, $tags);
 
-            $this->_update_translations($attachment->ID, $object, $system_object_id, $meta);
+            $this->_update_translations($attachment->ID, $object, $system_object_id, $meta, $wp_terms);
 
             return "<a href='/wp-admin/upload.php?item={$attachment->ID}'>Image {$attachment->ID} " . ($attachment->update ? 'updated' : 'inserted') . "</a>";
         }
@@ -242,25 +246,13 @@ namespace shap_datasource {
             return $meta;
         }
 
-        /**
-         * @param $object
-         * @param array $meta
-         * @param string $field_name
-         * @param bool $single
-         */
-        private function _parse_field($object, array &$meta, string $field_name, bool $single = true) {
-            foreach ($this->_language_map as $wp_language => $easydb_language) {
-                if (isset($object->$easydb_language)) {
-                    //$this->log("do add $field_name for $easydb_language. single: $single");
-                    if ($single) {
-                        $meta[$easydb_language][$field_name] = $object->$easydb_language;
-                    } else {
-                        if (!isset($meta[$easydb_language][$field_name])) $meta[$easydb_language][$field_name] = array();
-                        $meta[$easydb_language][$field_name][] = $object->$easydb_language;
-                    }
-
-                }
+        private function _init_tags() {
+            global $shap_taxonomies;
+            $tags = array();
+            foreach ($shap_taxonomies as $taxonomy_name => $taxonomy_label) {
+                $tags[$taxonomy_name] = array();
             }
+            return $tags;
         }
 
 
@@ -401,20 +393,61 @@ namespace shap_datasource {
          * @param array $tags target
          */
         private function _parse_nested($o, array &$tags) {
+//
+//            $to_parse = array(
+//                "keyword"   =>  "schlagwort",
+//                "element"   =>  "element",
+//                "style"     =>  "stilmerkmal",
+//                "tech"      =>  "technik",
+//                "material"  =>  "material",
+//            ); // skipped: teilelement, literatur
 
-            $to_parse = array(
-                "keyword"   =>  "schlagwort",
-                "element"   =>  "element",
-                "style"     =>  "stilmerkmal",
-                "tech"      =>  "technik",
-                "material"  =>  "material",
-            ); // skipped: teilelement, literatur
+            $easydb_nested_to_taxonomy = array(
+                'schlagwort' => 'tags'
+            );
 
-            foreach ($to_parse as $tag_type => $name) {
-                $n = "_nested:bilder__$name";
-                $a = "lk_{$name}_id";
+            foreach ($easydb_nested_to_taxonomy as $easydb_nested => $taxonomy) {
+                $n = "_nested:bilder__$easydb_nested";
+                $a = "lk_{$easydb_nested}_id";
+                $this->log("import $n -> $taxonomy");
                 foreach ($o->$n as $keyword) {
-                    $this->_parse_detail($keyword->$a, $tags, $tag_type, false);
+                    $this->_parse_detail($keyword->$a, $tags[$taxonomy], $taxonomy, true);
+                }
+            }
+        }
+
+        /**
+         * @param $block
+         * @param array $set
+         * @param string $name
+         * @param bool $single = true
+         * @param string $field = "_standard"
+         */
+        private function _parse_detail($block, array &$set, string $name, bool $single = true, string $field = "_standard") {
+            $one = 1;
+            if (isset($block->$field) and isset($block->$field->$one) and isset($block->$field->$one->text)) {
+                if (!$set[$name]) $set[$name] = array();
+                $set[$name][] = (array) $block->$field->$one->text;
+            }
+        }
+
+        /**
+         * @param $object
+         * @param array $meta
+         * @param string $field_name
+         * @param bool $single
+         */
+        private function _parse_field($object, array &$meta, string $field_name, bool $single = true) {
+            foreach ($this->_language_map as $wp_language => $easydb_language) {
+                if (isset($object->$easydb_language)) {
+                    $this->log("do add $field_name for $easydb_language. single: $single");
+                    if ($single) {
+                        $meta[$easydb_language][$field_name] = $object->$easydb_language;
+                    } else {
+                        if (!isset($meta[$easydb_language][$field_name])) $meta[$easydb_language][$field_name] = array();
+                        $meta[$easydb_language][$field_name][] = $object->$easydb_language;
+                    }
+
                 }
             }
         }
@@ -450,19 +483,6 @@ namespace shap_datasource {
 //            return substr($year, 0, 3) . "0s";
 //        }
 
-        /**
-         * @param $block
-         * @param array $set
-         * @param string $name
-         * @param bool $single = true
-         * @param string $field = "_standard"
-         */
-        private function _parse_detail($block, array &$set, string $name, bool $single = true, string $field = "_standard") {
-            $one = 1;
-            if (isset($block->$field) and isset($block->$field->$one) and isset($block->$field->$one->text)) {
-                $this->_parse_field($block->$field->$one->text, $set, $name, $single);
-            }
-        }
 
         /**
          * @param $o
@@ -471,13 +491,14 @@ namespace shap_datasource {
          */
         function _parse_place($o, array &$meta)  {
 
-            $this->log("parsing place", "info");
-
             if (!isset($o->ort_des_motivs_id)) {
+                $this->log("no place connected", "info");
                 return;
             }
 
             $soid = $o->ort_des_motivs_id->_system_object_id;
+
+            $this->log("parsing place $soid", "info");
 
             $place = json_decode($this->_fetch_external_data($this->api_place_url("$soid")));
 
@@ -532,6 +553,7 @@ namespace shap_datasource {
          * @param $meta
          */
         private function _update_meta($post_id, $meta) {
+
             foreach ($meta as $key => $value) {
                 add_post_meta($post_id, "shap_$key", $value, true);
             }
@@ -543,13 +565,15 @@ namespace shap_datasource {
          * @param $object
          * @param int $system_object_id
          * @param array $meta
+         * @param array $wp_terms
          * @throws \Exception
          */
-        private function _update_translations(int $post_id, $object, int $system_object_id, array $meta) {
+        private function _update_translations(int $post_id, $object, int $system_object_id, array $meta, array $wp_terms) {
 
             $translated_posts = wpml_get_content_translations("post_attachment", $post_id);
 
             foreach ($translated_posts as $wpml_language => $translated_post_id) {
+
                 $new_post = array(
                     'ID'             => $translated_post_id,
                     'post_title'     => $this->_get_best_field($object, $this->_language_map[$wpml_language], $fields = array('ueberschrift', 'titel'), "Image #$system_object_id ($wpml_language)"),
@@ -557,15 +581,60 @@ namespace shap_datasource {
                     'post_type'      => "attachment"
                 );
                 $id = wp_insert_post($new_post, true);
-                if ( $this->_is_error($id)) {
+
+                if ($this->_is_error($id)) {
                     throw new \Exception("Wordpress Error: Could not create attachment.");
                 }
+
                 $this->log("Image #$system_object_id: Translation to <i>$wpml_language</i> of $post_id is $id");
 
+                // meta fields
                 $this->_update_meta($translated_post_id, $meta[$this->_language_map[$wpml_language]]);
+
+                // taxonomies
+                if (count($wp_terms)) { // @ TODO STAND umsortien, sprache -> tax, damit man hier bulk inserten kann
+                    foreach ($wp_terms as $taxonomy => $terms) {
+                        $inserted = wp_set_post_terms($post_id, $wp_terms, "shap_tags", false);
+                        if (!$inserted or $this->_is_error($inserted)) {
+                            throw new \Exception("Could not insert Tags");
+                        }
+                    }
+                }
+            }
+        }
+
+        /**
+         * @param string $taxonomy
+         * @param int $from_term_id
+         * @param int $to_term_id
+         * @param string $from_wp_language
+         * @param string $to_wp_language
+         * @throws \Exception
+         */
+        private function _update_term_translation(string $taxonomy, int $from_term_id,  int $to_term_id, string $from_wp_language, string $to_wp_language) {
+
+            global $wpdb;
+
+            $update = $wpdb->update(
+                $wpdb->prefix.'icl_translations',
+                array(
+                    'trid' => wpml_get_content_trid( "tax_$taxonomy", $from_term_id),
+                    'element_type' => "tax_$taxonomy",
+                    'language_code' => $to_wp_language,
+                    'source_language_code' => $from_wp_language
+                ),
+                array(
+                    'element_id' => $to_term_id,
+                    'element_type' => "tax_$taxonomy"
+                )
+            );
+
+            if (!$update) {
+                throw new \Exception("Could tno insert data to icl_translations table"); // TODO track mysql error
             }
 
         }
+
 
         /**
          * @param \WP_Error | object | array $something
@@ -583,47 +652,98 @@ namespace shap_datasource {
         }
 
         /**
-         * @param $post_id
-         * @param array $tag_array
+         * @param string $taxonomy
+         * @param string $term_value
+         * @param array $params
+         * @return int $term_id
          * @throws \Exception
          */
-        private function _add_tags($post_id, array $tag_array) {
+        private function _get_or_insert_term(string $taxonomy, string $term_value, array $params = array()) : int {
 
-            $main_language = get_option("wpml-previous-default-language", "de");
+            $term_exists = get_term_by("slug", $params['slug'], $taxonomy);
+
+            if ($term_exists !== false) {
+                $term = wp_update_term($term_exists->term_id, $taxonomy, $params);
+                $action = "Updated";
+            } else {
+                $term = wp_insert_term($term_value, $taxonomy, $params);
+                $action = "Inserted";
+            }
+
+            if ($this->_is_error($term)) {
+                throw new \Exception("T counl not be $action: '$term_value' to '$taxonomy'");
+            }
+
+            $this->log("<a href='/wp-admin/term.php?taxonomy=$taxonomy&tag_ID={$term['term_id']}'>$action term '$term_value' to '$taxonomy'</a>");
+
+            return $term['term_id'];
+        }
+
+        /**
+         * @param array $tag_array
+         * @return array
+         * @throws \Exception
+         */
+        private function _add_terms(array $tag_array) {
+
+            $default_language = wpml_get_default_language();
+
+            // double check if order of languages was set correctly
+            if (array_keys($this->_language_map)[0] != $default_language) {
+                $first = array_keys($this->_language_map)[0];
+                throw new \Exception("First language must be default! $first != $default_language");
+            }
 
             $terms = array();
-            foreach ($this->_language_map as $wp_language => $easydb_language) {
 
-                if ($wp_language !== $main_language) {
-                    continue;
-                }
+            $this->log(shap_debug($tag_array));
 
-                $tags = $tag_array[$easydb_language];
+            foreach ($tag_array as $taxonomy => $term_sets) {
 
-                foreach ($tags as $tag_key => $tag_values) {
+                $terms[$taxonomy] = array_map(function($a) {return array();}, $this->_language_map);
 
-                    if (!is_array($tag_values)) {
-                        $tag_values = array();
-                    }
-                    foreach ($tag_values as $tag_value) {
-                        $params = array();
-                        $params["description"] = "shap_imported";
-                        $term = wp_insert_term($tag_value, "shap_tags", $params);
-                        if (!$this->_is_error($term)) {
-                            $terms[] = $term['term_id'];
+                foreach ($term_sets as $term_set_key => $tag_value_tiples) { // $term_set_key is unused atm
+
+                    foreach ($tag_value_tiples as $tag_value_triple) {
+
+                        $term_id_in_default_language = false;
+
+                        foreach ($this->_language_map as $wp_language => $easydb_language) {
+
+                            $params = array();
+                            $params["description"] = "shap_imported";
+                            $params["slug"] = implode('_', array(
+                                $this->_create_slug($term_set_key),
+                                $this->_create_slug($tag_value_triple[$easydb_language]),
+                                $wp_language
+                            ));
+                            $term_id = $this->_get_or_insert_term("shap_$taxonomy", $tag_value_triple[$easydb_language], $params);
+                            $terms[$taxonomy][$wp_language][] = $term_id;
+
+                            if ($term_id_in_default_language) {
+                                $this->_update_term_translation("shap_$taxonomy", $term_id_in_default_language, $term_id, $default_language, $wp_language);
+                            } else { // round 0
+                                $term_id_in_default_language = $term_id;
+                            }
                         }
                     }
-
                 }
 
             }
-            if (!count($terms)) {
-                return;
-            }
-            $inserted = wp_set_post_terms($post_id, $terms, "shap_tags", false);
-            if (!$inserted or $this->_is_error($inserted)) {
-                throw new \Exception("Could not insert Tags");
-            }
+
+            return $terms;
+
+        }
+
+        private function _create_slug(string $string){
+            return preg_replace('/[^A-Za-z0-9-]+/', '-', $string);
+        }
+
+        private function _set_primary_language_first() {
+            $default_language = wpml_get_default_language();
+            uksort($this->_language_map, function($a, $b) use ($default_language) {
+                return ($b == $default_language);
+            });
         }
 
     }
