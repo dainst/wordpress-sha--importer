@@ -3,8 +3,6 @@
 
 namespace shap_datasource {
 
-    use mysql_xdevapi\Exception;
-
     class shap_easydb extends abstract_datasource {
 
         public $debug = false;
@@ -218,11 +216,11 @@ namespace shap_datasource {
 
             $attachment = $this->_create_or_update_attachment($object, $system_object_id);
 
-            $meta = $this->_init_meta();
-            $tags = $this->_init_tags();
-            $this->_parse_place($object, $meta);
-            $this->_parse_field($object->copyright_vermerk, $meta, "copyright_vermerk");
-            $this->_parse_nested($object, $tags);
+            $to_import_as_meta = $this->_init_meta();
+            $to_import_as_terms = $this->_init_tags();
+            $this->_parse_place($object, $to_import_as_meta);
+            $this->_parse_field($object->copyright_vermerk, $to_import_as_meta, "copyright_vermerk");
+            $this->_parse_nested($object, $to_import_as_terms);
 
 //            $this->_parse_blocks($object, $data);
 //            $this->_parse_date($object, $data);
@@ -231,9 +229,11 @@ namespace shap_datasource {
 
 //            $html = $image->render();
 
-            $wp_terms = $this->_add_terms($attachment->ID, $tags);
+            $wp_terms = $this->_add_terms($to_import_as_terms);
 
-            $this->_update_translations($attachment->ID, $object, $system_object_id, $meta, $wp_terms);
+            $translated_attachments = $this->_update_post_translations($attachment->ID, $object, $system_object_id, $to_import_as_meta);
+
+            $this->_update_term_translations($translated_attachments, $wp_terms);
 
             return "<a href='/wp-admin/upload.php?item={$attachment->ID}'>Image {$attachment->ID} " . ($attachment->update ? 'updated' : 'inserted') . "</a>";
         }
@@ -411,7 +411,7 @@ namespace shap_datasource {
                 $a = "lk_{$easydb_nested}_id";
                 $this->log("import $n -> $taxonomy");
                 foreach ($o->$n as $keyword) {
-                    $this->_parse_detail($keyword->$a, $tags[$taxonomy], $taxonomy, true);
+                    $this->_parse_detail($keyword->$a, $tags[$taxonomy], $taxonomy);
                 }
             }
         }
@@ -420,10 +420,9 @@ namespace shap_datasource {
          * @param $block
          * @param array $set
          * @param string $name
-         * @param bool $single = true
          * @param string $field = "_standard"
          */
-        private function _parse_detail($block, array &$set, string $name, bool $single = true, string $field = "_standard") {
+        private function _parse_detail($block, array &$set, string $name, string $field = "_standard") {
             $one = 1;
             if (isset($block->$field) and isset($block->$field->$one) and isset($block->$field->$one->text)) {
                 if (!$set[$name]) $set[$name] = array();
@@ -528,24 +527,24 @@ namespace shap_datasource {
 
         }
 
-        function _parse_tags($o, \esa_item\data $data) {
-            $import_tags = array(
-                31  => "article_image",
-                4   => "aleppo access",
-                16  => "in process",
-                19  => "accessible",
-                25  => "destroyed"
-            );
-
-            $used_tags = array_map(function($t) {return $t->_id;}, $o->_tags);
-
-            foreach ($used_tags as $tag) {
-                if (isset($import_tags[$tag])) {
-                    $data->put("tag", $import_tags[$tag]);
-                }
-            }
-
-        }
+//        function _parse_tags($o, \esa_item\data $data) {
+//            $import_tags = array(
+//                31  => "article_image",
+//                4   => "aleppo access",
+//                16  => "in process",
+//                19  => "accessible",
+//                25  => "destroyed"
+//            );
+//
+//            $used_tags = array_map(function($t) {return $t->_id;}, $o->_tags);
+//
+//            foreach ($used_tags as $tag) {
+//                if (isset($import_tags[$tag])) {
+//                    $data->put("tag", $import_tags[$tag]);
+//                }
+//            }
+//
+//        }
 
 
         /**
@@ -565,19 +564,19 @@ namespace shap_datasource {
          * @param $object
          * @param int $system_object_id
          * @param array $meta
-         * @param array $wp_terms
+         * @return array|int
          * @throws \Exception
          */
-        private function _update_translations(int $post_id, $object, int $system_object_id, array $meta, array $wp_terms) {
+        private function _update_post_translations(int $post_id, $object, int $system_object_id, array $meta) {
 
             $translated_posts = wpml_get_content_translations("post_attachment", $post_id);
 
-            foreach ($translated_posts as $wpml_language => $translated_post_id) {
+            foreach ($translated_posts as $wp_language => $translated_post_id) {
 
                 $new_post = array(
                     'ID'             => $translated_post_id,
-                    'post_title'     => $this->_get_best_field($object, $this->_language_map[$wpml_language], $fields = array('ueberschrift', 'titel'), "Image #$system_object_id ($wpml_language)"),
-                    'post_content'   => $this->_get_best_field($object, $this->_language_map[$wpml_language], $fields = array('beschreibung'), ""),
+                    'post_title'     => $this->_get_best_field($object, $this->_language_map[$wp_language], $fields = array('ueberschrift', 'titel'), "Image #$system_object_id ($wp_language)"),
+                    'post_content'   => $this->_get_best_field($object, $this->_language_map[$wp_language], $fields = array('beschreibung'), ""),
                     'post_type'      => "attachment"
                 );
                 $id = wp_insert_post($new_post, true);
@@ -586,18 +585,30 @@ namespace shap_datasource {
                     throw new \Exception("Wordpress Error: Could not create attachment.");
                 }
 
-                $this->log("Image #$system_object_id: Translation to <i>$wpml_language</i> of $post_id is $id");
+                $this->log("Image #$system_object_id: Translation to <i>$wp_language</i> of $post_id is $id");
 
-                // meta fields
-                $this->_update_meta($translated_post_id, $meta[$this->_language_map[$wpml_language]]);
+                $this->_update_meta($translated_post_id, $meta[$this->_language_map[$wp_language]]);
+            }
 
-                // taxonomies
-                if (count($wp_terms)) { // @ TODO STAND umsortien, sprache -> tax, damit man hier bulk inserten kann
-                    foreach ($wp_terms as $taxonomy => $terms) {
-                        $inserted = wp_set_post_terms($post_id, $wp_terms, "shap_tags", false);
-                        if (!$inserted or $this->_is_error($inserted)) {
-                            throw new \Exception("Could not insert Tags");
-                        }
+            return $translated_posts;
+        }
+
+        /**
+         * @param array $translated_posts
+         * @param array $wp_terms
+         * @throws \Exception
+         */
+        private function _update_term_translations(array $translated_posts, array $wp_terms) {
+
+            if (!count($wp_terms)) {
+                return;
+            }
+
+            foreach ($translated_posts as $wp_language => $translated_post_id) {
+                foreach ($wp_terms[$wp_language] as $taxonomy => $term_ids) {
+                    $inserted = wp_set_post_terms($translated_post_id, $term_ids, "shap_$taxonomy", false);
+                    if (!$inserted or $this->_is_error($inserted)) {
+                        throw new \Exception("Could not insert terms to post: $translated_post_id");
                     }
                 }
             }
@@ -694,13 +705,9 @@ namespace shap_datasource {
                 throw new \Exception("First language must be default! $first != $default_language");
             }
 
-            $terms = array();
-
-            $this->log(shap_debug($tag_array));
+            $terms = array_map(function($dummy) {return array();}, $this->_language_map);
 
             foreach ($tag_array as $taxonomy => $term_sets) {
-
-                $terms[$taxonomy] = array_map(function($a) {return array();}, $this->_language_map);
 
                 foreach ($term_sets as $term_set_key => $tag_value_tiples) { // $term_set_key is unused atm
 
@@ -718,7 +725,8 @@ namespace shap_datasource {
                                 $wp_language
                             ));
                             $term_id = $this->_get_or_insert_term("shap_$taxonomy", $tag_value_triple[$easydb_language], $params);
-                            $terms[$taxonomy][$wp_language][] = $term_id;
+                            if (!isset($terms[$wp_language][$taxonomy])) $terms[$wp_language][$taxonomy] = array();
+                            $terms[$wp_language][$taxonomy][] = $term_id;
 
                             if ($term_id_in_default_language) {
                                 $this->_update_term_translation("shap_$taxonomy", $term_id_in_default_language, $term_id, $default_language, $wp_language);
@@ -731,8 +739,9 @@ namespace shap_datasource {
 
             }
 
-            return $terms;
+            $this->log("terms: " . shap_debug($terms));
 
+            return $terms;
         }
 
         private function _create_slug(string $string){
@@ -748,4 +757,3 @@ namespace shap_datasource {
 
     }
 }
-?>
