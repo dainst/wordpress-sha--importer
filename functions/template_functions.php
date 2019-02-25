@@ -3,6 +3,7 @@
  * Usage: shap_bounding_box_query(35.5,40, 30,30)
  *
  * TODO how to handle multilanguage?
+ * TODO implement geographical queries over term_meta
  *
  * @param $lat_1 - first point
  * @param $long_1 - first point

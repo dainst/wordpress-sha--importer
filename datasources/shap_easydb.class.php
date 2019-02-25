@@ -217,9 +217,9 @@ namespace shap_datasource {
             $attachment = $this->_create_or_update_attachment($object, $system_object_id);
 
             $to_import_as_meta = $this->_init_meta();
-            $to_import_as_terms = $this->_init_tags();
-            $this->_parse_place($object, $to_import_as_meta);
-            $this->_parse_field($object->copyright_vermerk, $to_import_as_meta, "copyright_vermerk");
+            $to_import_as_terms = $this->_init_term_collector();
+            $this->_parse_place($object, $to_import_as_meta, $to_import_as_meta);
+            $this->_parse_field_to_meta($object->copyright_vermerk, $to_import_as_meta, "copyright_vermerk");
             $this->_parse_nested($object, $to_import_as_terms);
 
 //            $this->_parse_blocks($object, $data);
@@ -229,7 +229,7 @@ namespace shap_datasource {
 
 //            $html = $image->render();
 
-            $wp_terms = $this->_add_terms($to_import_as_terms);
+            $wp_terms = $this->_add_terms_to_wp($to_import_as_terms);
 
             $translated_attachments = $this->_update_post_translations($attachment->ID, $object, $system_object_id, $to_import_as_meta);
 
@@ -246,7 +246,7 @@ namespace shap_datasource {
             return $meta;
         }
 
-        private function _init_tags() {
+        private function _init_term_collector() {
             global $shap_taxonomies;
             $tags = array();
             foreach ($shap_taxonomies as $taxonomy_name => $taxonomy_label) {
@@ -409,9 +409,8 @@ namespace shap_datasource {
             foreach ($easydb_nested_to_taxonomy as $easydb_nested => $taxonomy) {
                 $n = "_nested:bilder__$easydb_nested";
                 $a = "lk_{$easydb_nested}_id";
-                $this->log("import $n -> $taxonomy");
                 foreach ($o->$n as $keyword) {
-                    $this->_parse_detail($keyword->$a, $tags[$taxonomy], $taxonomy);
+                    $this->_parse_detail_to_terms($keyword->$a, $tags[$taxonomy], $taxonomy);
                 }
             }
         }
@@ -422,7 +421,7 @@ namespace shap_datasource {
          * @param string $name
          * @param string $field = "_standard"
          */
-        private function _parse_detail($block, array &$set, string $name, string $field = "_standard") {
+        private function _parse_detail_to_terms($block, array &$set, string $name, string $field = "_standard") {
             $one = 1;
             if (isset($block->$field) and isset($block->$field->$one) and isset($block->$field->$one->text)) {
                 if (!$set[$name]) $set[$name] = array();
@@ -436,10 +435,10 @@ namespace shap_datasource {
          * @param string $field_name
          * @param bool $single
          */
-        private function _parse_field($object, array &$meta, string $field_name, bool $single = true) {
+        private function _parse_field_to_meta($object, array &$meta, string $field_name, bool $single = true) {
             foreach ($this->_language_map as $wp_language => $easydb_language) {
                 if (isset($object->$easydb_language)) {
-                    $this->log("do add $field_name for $easydb_language. single: $single");
+                    //$this->log("do add $field_name for $easydb_language. single: $single");
                     if ($single) {
                         $meta[$easydb_language][$field_name] = $object->$easydb_language;
                     } else {
@@ -485,10 +484,11 @@ namespace shap_datasource {
 
         /**
          * @param $o
-         * @param array $meta
+         * @param array $meta_collector
+         * @param array $term_collector
          * @throws \Exception
          */
-        function _parse_place($o, array &$meta)  {
+        function _parse_place($o, array &$meta_collector, array $term_collector)  {
 
             if (!isset($o->ort_des_motivs_id)) {
                 $this->log("no place connected", "info");
@@ -509,21 +509,35 @@ namespace shap_datasource {
 
             $gazId = $place->ortsthesaurus->gazetteer_id;
 
-            //            foreach ($gazId->otherNames as $name) { TODO translatable names?
-            //                $data->put("place", $name->title, "#");
-            //            }
-
             if (!isset($gazId->position)) {
                 return;
             }
 
-            foreach ($meta as $lang => $lang_mata) {
-                $meta[$lang]["latitude"]       =   $gazId->position->lat;
-                $meta[$lang]["longitude"]      =   $gazId->position->lng;
-                $meta[$lang]["gazetteer_id"]   =   $gazId->gazId;
-                $meta[$lang]["place_name"]     =   $gazId->displayName;
+            $term_collector['places']['place'] = array_map(function($dummy) {return array();}, $this->_language_map);
+
+            /**
+             * unfortunately $gazId->otherNames are not localized in easydb, so we can't import the place names localized
+             * TODO query gazetteer to get the localized names?
+             */
+            foreach ($term_collector['places']['place'] as $easydb_language => $terms) {
+                $term_collector['places']['place'][$easydb_language] = array(
+                    "value"         => $gazId->displayName,
+                    "latitude"      => $gazId->position->lat,
+                    "longitude"     => $gazId->position->lng,
+                    "gazetteer_id"  =>  $gazId->gazId
+                );
             }
 
+            /**
+             * to store this information in post as is redundant, but we don't have the time yet to develop geographical
+             * queries over term_meta
+             */
+            foreach ($meta_collector as $lang => $lang_meta) {
+                $meta_collector[$lang]["latitude"]       =   $gazId->position->lat;
+                $meta_collector[$lang]["longitude"]      =   $gazId->position->lng;
+                $meta_collector[$lang]["gazetteer_id"]   =   $gazId->gazId;
+                $meta_collector[$lang]["place_name"]     =   $gazId->displayName;
+            }
 
         }
 
@@ -631,21 +645,20 @@ namespace shap_datasource {
                 array(
                     'trid' => wpml_get_content_trid( "tax_$taxonomy", $from_term_id),
                     'element_type' => "tax_$taxonomy",
-                    'language_code' => $to_wp_language,
-                    'source_language_code' => $from_wp_language
+                    'source_language_code' => $from_wp_language,
+                    'language_code' => $to_wp_language
                 ),
                 array(
                     'element_id' => $to_term_id,
-                    'element_type' => "tax_$taxonomy"
+                    'element_type' => "tax_$taxonomy",
                 )
             );
 
             if (!$update) {
-                throw new \Exception("Could tno insert data to icl_translations table"); // TODO track mysql error
+                throw new \Exception("Could not insert data to icl_translations table: $wpdb->last_error" . shap_debug($wpdb->last_query));
             }
 
         }
-
 
         /**
          * @param \WP_Error | object | array $something
@@ -663,49 +676,117 @@ namespace shap_datasource {
         }
 
         /**
-         * @param string $taxonomy
-         * @param string $term_value
-         * @param array $params
-         * @return int $term_id
+         * we can not use get_terms or such because wmpl is interfering!
+         *
+         * @param $identity
+         * @return array | bool
          * @throws \Exception
          */
-        private function _get_or_insert_term(string $taxonomy, string $term_value, array $params = array()) : int {
-
-            $term_exists = get_term_by("slug", $params['slug'], $taxonomy);
-
-            if ($term_exists !== false) {
-                $term = wp_update_term($term_exists->term_id, $taxonomy, $params);
-                $action = "Updated";
-            } else {
-                $term = wp_insert_term($term_value, $taxonomy, $params);
-                $action = "Inserted";
+        private function _get_wp_get_term_by_identity($identity) {
+            global $wpdb;
+            $sql = "select
+                    *
+                from
+                  wp_terms as terms
+                  left join wp_termmeta as termmeta on (terms.term_id = termmeta.term_id)
+                where
+                  termmeta.meta_key = 'identity' and
+                  termmeta.meta_value = '$identity'";
+            $result = $wpdb->get_results($sql);
+            if ($wpdb->last_error) {
+                throw new \Exception("Could fetch term with identity '$identity': $wpdb->last_error" . shap_debug($wpdb->last_query));
             }
+            $this->log("existing_terms:" . shap_debug($result));
 
-            if ($this->_is_error($term)) {
-                throw new \Exception("T counl not be $action: '$term_value' to '$taxonomy'");
+            if (count($result) > 1) {
+                throw new \Exception("More than one term with identity {$identity} exist!");
             }
-
-            $this->log("<a href='/wp-admin/term.php?taxonomy=$taxonomy&tag_ID={$term['term_id']}'>$action term '$term_value' to '$taxonomy'</a>");
-
-            return $term['term_id'];
+            if ($this->_is_error($result)) {
+                throw new \Exception("Error trying to get term with identity {$identity}");
+            }
+            return count($result) ? (array) $result[0] : false;
         }
 
         /**
+         * @param string $wp_taxonomy taxonomy name with shap_ -prefix
+         * @param string $term_value
+         * @param array $params
+         * @param array $term_meta
+         * @return object {ID: term_id, update: bool}
+         * @throws \Exception
+         */
+        private function _create_or_update_term(string $wp_taxonomy, string $term_value, array $params = array(), array $term_meta = array()) {
+
+            $this->log("SLUG ME " . $params["slug"] . "/ Identity: {$term_meta["identity"]}");
+
+            $term = $this->_get_wp_get_term_by_identity($term_meta["identity"]);
+            $inserted = false;
+
+            if (!$term) {
+                $term = wp_insert_term($term_value, $wp_taxonomy, $params);
+                $inserted = true;
+            }
+
+            if ($this->_is_error($term)) {
+                throw new \Exception("Tag could not be Inserted: '$term_value' to '$wp_taxonomy' ({$term_meta["identity"]})");
+            }
+
+            $this->log("Updating metadata for tag: '$term_value' to '$wp_taxonomy' ({$term_meta["identity"]})");
+            foreach ($term_meta as $meta_key => $meta_value) {
+                if ($meta_key == 'value') continue;
+                $this->_is_error(update_term_meta($term['term_id'], $meta_key, $meta_value));
+            }
+
+            $action = $inserted ? "Inserted" : "Updated";
+            $this->log("<a href='/wp-admin/term.php?taxonomy=$wp_taxonomy&tag_ID={$term['term_id']}'>$action term '$term_value' to '$wp_taxonomy'</a>");
+
+            return (object) array(
+                "update" => !$inserted,
+                "ID" => $term['term_id']
+            );
+        }
+
+        /**
+         * Structure for $tag_array TODO use classes for structure to make it more robust
+         *
+         * {
+         *
+         *      <taxonomy_name> : { // like 'tags' or 'place'
+         *          <term_set_key>: [ // like 'stuff'
+         *              <easy_db_lang>: "TERM",
+         *              ...
+         *          ],
+         *          <term_set_key>: [
+         *              <easy_db_lang>: {
+         *                  "value": "TERM",
+         *                  <meta_field>: <meta_field_value>,
+         *                  ...
+         *              },
+         *              ...
+         *          ],
+         *          ...
+         *      },
+         *      ...
+         * }
+         *
+         *
          * @param array $tag_array
          * @return array
          * @throws \Exception
          */
-        private function _add_terms(array $tag_array) {
+        private function _add_terms_to_wp(array $tag_array) {
 
             $default_language = wpml_get_default_language();
 
-            // double check if order of languages was set correctly
+            // double check if order of languages was set correctly (theoretically redundant)
             if (array_keys($this->_language_map)[0] != $default_language) {
                 $first = array_keys($this->_language_map)[0];
                 throw new \Exception("First language must be default! $first != $default_language");
             }
 
             $terms = array_map(function($dummy) {return array();}, $this->_language_map);
+
+            $this->log("collected terms: " . shap_debug($tag_array), "debug");
 
             foreach ($tag_array as $taxonomy => $term_sets) {
 
@@ -717,21 +798,38 @@ namespace shap_datasource {
 
                         foreach ($this->_language_map as $wp_language => $easydb_language) {
 
+                            list($term_value, $term_meta) = is_array($tag_value_triple[$easydb_language])
+                                ? array($tag_value_triple[$easydb_language]['value'], $tag_value_triple[$easydb_language])
+                                : array($tag_value_triple[$easydb_language], array());
                             $params = array();
-                            $params["description"] = "shap_imported";
+                            $params["description"] = "Imported from EasyDB\n" . date("d.m.Y h:i:s");
                             $params["slug"] = implode('_', array(
                                 $this->_create_slug($term_set_key),
-                                $this->_create_slug($tag_value_triple[$easydb_language]),
+                                $this->_create_slug($term_value),
                                 $wp_language
                             ));
-                            $term_id = $this->_get_or_insert_term("shap_$taxonomy", $tag_value_triple[$easydb_language], $params);
-                            if (!isset($terms[$wp_language][$taxonomy])) $terms[$wp_language][$taxonomy] = array();
-                            $terms[$wp_language][$taxonomy][] = $term_id;
+                            $term_meta["shap_imported"] = time();
+                            $term_meta["identity"] = implode('-', array(
+                                rawurlencode($taxonomy),
+                                rawurlencode($term_set_key),
+                                rawurlencode($term_value),
+                                rawurlencode($wp_language),
+                            ));
 
-                            if ($term_id_in_default_language) {
-                                $this->_update_term_translation("shap_$taxonomy", $term_id_in_default_language, $term_id, $default_language, $wp_language);
-                            } else { // round 0
-                                $term_id_in_default_language = $term_id;
+                            $term = $this->_create_or_update_term("shap_$taxonomy", $term_value, $params, $term_meta);
+                            if (!isset($terms[$wp_language][$taxonomy])) $terms[$wp_language][$taxonomy] = array();
+                            $terms[$wp_language][$taxonomy][] = $term->ID;
+
+                            $this->log("SHITE: " . shap_debug($term->update));
+
+                            if (!$term->update) {
+                                if ($term_id_in_default_language) {
+                                    $this->log("XX translate $term_id_in_default_language, {$term->ID}, $default_language, $wp_language");
+                                    $this->_update_term_translation("shap_$taxonomy", $term_id_in_default_language, $term->ID, $default_language, $wp_language);
+                                } else { // round 0
+                                    $this->log("XX translate set #term_id_in_default_language to  {$term->ID}");
+                                    $term_id_in_default_language = $term->ID;
+                                }
                             }
                         }
                     }
@@ -745,7 +843,7 @@ namespace shap_datasource {
         }
 
         private function _create_slug(string $string){
-            return preg_replace('/[^A-Za-z0-9-]+/', '-', $string);
+            return strtolower(preg_replace('/[^A-Za-z0-9-]+/', '-', $string));
         }
 
         private function _set_primary_language_first() {
@@ -756,4 +854,5 @@ namespace shap_datasource {
         }
 
     }
+
 }
