@@ -620,7 +620,7 @@ namespace shap_datasource {
 
             foreach ($translated_posts as $wp_language => $translated_post_id) {
                 foreach ($wp_terms[$wp_language] as $taxonomy => $term_ids) {
-                    $inserted = wp_set_post_terms($translated_post_id, $term_ids, "shap_$taxonomy", false);
+                    $inserted = wp_set_object_terms($translated_post_id, $term_ids, "shap_$taxonomy", false);
                     if (!$inserted or $this->_is_error($inserted)) {
                         throw new \Exception("Could not insert terms to post: $translated_post_id");
                     }
@@ -696,7 +696,6 @@ namespace shap_datasource {
             if ($wpdb->last_error) {
                 throw new \Exception("Could fetch term with identity '$identity': $wpdb->last_error" . shap_debug($wpdb->last_query));
             }
-            $this->log("existing_terms:" . shap_debug($result));
 
             if (count($result) > 1) {
                 throw new \Exception("More than one term with identity {$identity} exist!");
@@ -716,8 +715,6 @@ namespace shap_datasource {
          * @throws \Exception
          */
         private function _create_or_update_term(string $wp_taxonomy, string $term_value, array $params = array(), array $term_meta = array()) {
-
-            $this->log("SLUG ME " . $params["slug"] . "/ Identity: {$term_meta["identity"]}");
 
             $term = $this->_get_wp_get_term_by_identity($term_meta["identity"]);
             $inserted = false;
@@ -818,9 +815,7 @@ namespace shap_datasource {
 
                             $term = $this->_create_or_update_term("shap_$taxonomy", $term_value, $params, $term_meta);
                             if (!isset($terms[$wp_language][$taxonomy])) $terms[$wp_language][$taxonomy] = array();
-                            $terms[$wp_language][$taxonomy][] = $term->ID;
-
-                            $this->log("SHITE: " . shap_debug($term->update));
+                            $terms[$wp_language][$taxonomy][] = (int) $term->ID;
 
                             if (!$term->update) {
                                 if ($term_id_in_default_language) {
