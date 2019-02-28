@@ -216,11 +216,11 @@ namespace shap_datasource {
 
             $attachment = $this->_create_or_update_attachment($object, $system_object_id);
 
-            $to_import_as_meta = $this->_init_meta();
-            $to_import_as_terms = $this->_init_term_collector();
-            $this->_parse_place($object, $to_import_as_meta, $to_import_as_meta);
-            $this->_parse_field_to_meta($object->copyright_vermerk, $to_import_as_meta, "copyright_vermerk");
-            $this->_parse_nested($object, $to_import_as_terms);
+            $meta_collector = $this->_init_meta_collector();
+            $term_collector = $this->_init_term_collector();
+            $this->_parse_place($object, $meta_collector, $term_collector);
+            $this->_parse_field_to_meta($object->copyright_vermerk, $meta_collector, "copyright_vermerk");
+            $this->_parse_nested($object, $term_collector);
 
 //            $this->_parse_blocks($object, $data);
 //            $this->_parse_date($object, $data);
@@ -229,16 +229,16 @@ namespace shap_datasource {
 
 //            $html = $image->render();
 
-            $wp_terms = $this->_add_terms_to_wp($to_import_as_terms);
+            $wp_terms = $this->_add_terms_to_wp($term_collector);
 
-            $translated_attachments = $this->_update_post_translations($attachment->ID, $object, $system_object_id, $to_import_as_meta);
+            $translated_attachments = $this->_update_post_translations($attachment->ID, $object, $system_object_id, $meta_collector);
 
             $this->_update_term_translations($translated_attachments, $wp_terms);
 
             return "<a href='/wp-admin/upload.php?item={$attachment->ID}'>Image {$attachment->ID} " . ($attachment->update ? 'updated' : 'inserted') . "</a>";
         }
 
-        private function _init_meta() {
+        private function _init_meta_collector() {
             $meta = array();
             foreach ($this->_language_map as $wp_language => $easydb_language) {
                 $meta[$easydb_language] = array();
@@ -488,7 +488,7 @@ namespace shap_datasource {
          * @param array $term_collector
          * @throws \Exception
          */
-        function _parse_place($o, array &$meta_collector, array $term_collector)  {
+        function _parse_place($o, array &$meta_collector, array &$term_collector)  {
 
             if (!isset($o->ort_des_motivs_id)) {
                 $this->log("no place connected", "info");
@@ -513,20 +513,23 @@ namespace shap_datasource {
                 return;
             }
 
-            $term_collector['places']['place'] = array_map(function($dummy) {return array();}, $this->_language_map);
-
             /**
              * unfortunately $gazId->otherNames are not localized in easydb, so we can't import the place names localized
              * TODO query gazetteer to get the localized names?
+             * for now we import three times the same place for each language
              */
-            foreach ($term_collector['places']['place'] as $easydb_language => $terms) {
-                $term_collector['places']['place'][$easydb_language] = array(
+            $term_collector['places']['place'] = array();
+            $term_collector['places']['place'][0] = array_map(function($dummy) {return array();}, array_flip($this->_language_map));
+            foreach ($term_collector['places']['place'][0] as $easydb_language => $terms) {
+                $term_collector['places']['place'][0][$easydb_language] = array(
                     "value"         => $gazId->displayName,
                     "latitude"      => $gazId->position->lat,
                     "longitude"     => $gazId->position->lng,
-                    "gazetteer_id"  =>  $gazId->gazId
+                    "gazetteer_id"  => $gazId->gazId
                 );
             }
+
+            $this->log('$term_collector' . shap_debug($term_collector));
 
             /**
              * to store this information in post as is redundant, but we don't have the time yet to develop geographical
@@ -728,7 +731,7 @@ namespace shap_datasource {
                 throw new \Exception("Tag could not be Inserted: '$term_value' to '$wp_taxonomy' ({$term_meta["identity"]})");
             }
 
-            $this->log("Updating metadata for tag: '$term_value' to '$wp_taxonomy' ({$term_meta["identity"]})");
+            //$this->log("Updating metadata for tag: '$term_value' to '$wp_taxonomy' ({$term_meta["identity"]})");
             foreach ($term_meta as $meta_key => $meta_value) {
                 if ($meta_key == 'value') continue;
                 $this->_is_error(update_term_meta($term['term_id'], $meta_key, $meta_value));
@@ -789,7 +792,7 @@ namespace shap_datasource {
 
                 foreach ($term_sets as $term_set_key => $tag_value_tiples) { // $term_set_key is unused atm
 
-                    foreach ($tag_value_tiples as $tag_value_triple) {
+                    foreach ($tag_value_tiples as $triple_nr => $tag_value_triple) {
 
                         $term_id_in_default_language = false;
 
@@ -800,6 +803,12 @@ namespace shap_datasource {
                                 : array($tag_value_triple[$easydb_language], array());
                             $params = array();
                             $params["description"] = "Imported from EasyDB\n" . date("d.m.Y h:i:s");
+
+                            if (!$term_value) {
+                                $this->error("Term $taxonomy->$term_set_key->$triple_nr->$wp_language has no value:" . shap_debug($tag_value_triple));
+                                continue;
+                            }
+
                             $params["slug"] = implode('_', array(
                                 $this->_create_slug($term_set_key),
                                 $this->_create_slug($term_value),
@@ -819,10 +828,8 @@ namespace shap_datasource {
 
                             if (!$term->update) {
                                 if ($term_id_in_default_language) {
-                                    $this->log("XX translate $term_id_in_default_language, {$term->ID}, $default_language, $wp_language");
                                     $this->_update_term_translation("shap_$taxonomy", $term_id_in_default_language, $term->ID, $default_language, $wp_language);
                                 } else { // round 0
-                                    $this->log("XX translate set #term_id_in_default_language to  {$term->ID}");
                                     $term_id_in_default_language = $term->ID;
                                 }
                             }
@@ -831,8 +838,6 @@ namespace shap_datasource {
                 }
 
             }
-
-            $this->log("terms: " . shap_debug($terms));
 
             return $terms;
         }

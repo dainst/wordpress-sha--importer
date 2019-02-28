@@ -27,4 +27,23 @@ add_action('init', function() {
             )
         );
     }
+
+
+    add_action('shap_places_edit_form_fields', function($term, $taxonomy) {
+
+        $meta = get_term_meta($term->term_id);
+
+        $display_meta = array("gazetteer_id", "latitude", "longitude");
+
+        echo "<tr class=''><th scope='row'>SHAP Metadata</th><td>";
+
+        foreach ($display_meta as $meta_key) {
+            echo "<div>{$meta_key}: {$meta[$meta_key][0]}</div>";
+        }
+
+        echo "</td></div>";
+
+    }, 10, 2);
+
+
 });
