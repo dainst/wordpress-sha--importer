@@ -224,7 +224,7 @@ namespace shap_datasource {
 
 //            $this->_parse_blocks($object, $data);
 //            $this->_parse_date($object, $data);
-//            $this->_parse_pool($object, $data);
+            $this->_parse_pool($object, $term_collector);
 //            $this->_parse_tags($json_response[0], $data);
 
 //            $html = $image->render();
@@ -380,13 +380,18 @@ namespace shap_datasource {
             return $default;
         }
 
-//        function _parse_pool($o, \esa_item\data $data) {
-//            if ($o->_pool->pool->_id == 1) {
-//                return;
-//            }
-//
-//            $data->putMultilang("pool", (array) $o->_pool->pool->name);
-//        }
+        /**
+         * @param $object
+         * @param array $term_collector
+         */
+        function _parse_pool($object, array &$term_collector) {
+            if ($object->_pool->pool->_id == 1) {
+                return;
+            }
+
+            $term_collector['pool']['pool'] = array();
+            $term_collector['pool']['pool'][0] = (array) $object->_pool->pool->name;
+        }
 
         /**
          * @param $o
