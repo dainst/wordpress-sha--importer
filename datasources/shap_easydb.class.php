@@ -222,8 +222,8 @@ namespace shap_datasource {
             $this->_parse_field_to_meta($object->copyright_vermerk, $meta_collector, "copyright_vermerk");
             $this->_parse_nested($object, $term_collector);
 
-//            $this->_parse_blocks($object, $data);
-//            $this->_parse_date($object, $data);
+            $this->_parse_blocks($object, $term_collector);
+            $this->_parse_date($object, $term_collector);
             $this->_parse_pool($object, $term_collector);
 //            $this->_parse_tags($json_response[0], $data);
 
@@ -381,56 +381,54 @@ namespace shap_datasource {
         }
 
         /**
-         * @param $object
+         * @param $source
          * @param array $term_collector
          */
-        function _parse_pool($object, array &$term_collector) {
-            if ($object->_pool->pool->_id == 1) {
+        function _parse_pool($source, array &$term_collector) {
+            if ($source->_pool->pool->_id == 1) {
                 return;
             }
 
             $term_collector['pool']['pool'] = array();
-            $term_collector['pool']['pool'][0] = (array) $object->_pool->pool->name;
+            $term_collector['pool']['pool'][0] = (array) $source->_pool->pool->name;
         }
 
         /**
-         * @param $o
-         * @param array $tags target
+         * @param $source
+         * @param array $term_collector target //2249
          */
-        private function _parse_nested($o, array &$tags) {
-//
-//            $to_parse = array(
-//                "keyword"   =>  "schlagwort",
-//                "element"   =>  "element",
-//                "style"     =>  "stilmerkmal",
-//                "tech"      =>  "technik",
-//                "material"  =>  "material",
-//            ); // skipped: teilelement, literatur
+        private function _parse_nested($source, array &$term_collector) {
 
             $easydb_nested_to_taxonomy = array(
-                'schlagwort' => 'tags'
-            );
+                'schlagwort' => 'tags',
+                "element" => 'tags',
+                "style" => 'tags',
+                "tech" => 'tags',
+                "material" => 'tags',
+                "artdesmotivs_new" => 'subject'
+            ); // skipped: teilelement, literatur
 
             foreach ($easydb_nested_to_taxonomy as $easydb_nested => $taxonomy) {
                 $n = "_nested:bilder__$easydb_nested";
                 $a = "lk_{$easydb_nested}_id";
-                foreach ($o->$n as $keyword) {
-                    $this->_parse_detail_to_terms($keyword->$a, $tags[$taxonomy], $taxonomy);
+                foreach ($source->$n as $keyword) {
+                    $this->_parse_detail_to_terms($keyword->$a, $term_collector, $taxonomy, $taxonomy);
                 }
             }
         }
 
         /**
          * @param $block
-         * @param array $set
+         * @param array $term_collector
+         * @param string $taxonomy
          * @param string $name
          * @param string $field = "_standard"
          */
-        private function _parse_detail_to_terms($block, array &$set, string $name, string $field = "_standard") {
+        private function _parse_detail_to_terms($block, array &$term_collector, string $taxonomy, string $name, string $field = "_standard") {
             $one = 1;
             if (isset($block->$field) and isset($block->$field->$one) and isset($block->$field->$one->text)) {
-                if (!$set[$name]) $set[$name] = array();
-                $set[$name][] = (array) $block->$field->$one->text;
+                if (!$term_collector[$taxonomy][$name]) $term_collector[$taxonomy][$name] = array();
+                $term_collector[$taxonomy][$name][] = (array) $block->$field->$one->text;
             }
         }
 
@@ -455,52 +453,70 @@ namespace shap_datasource {
             }
         }
 
-//        function _parse_date($o, \esa_item\data $data) {
-//            if (isset($o->original_datum)) {
-//                $data->put("decade", $this->_get_decade($o->original_datum->_from));
-//            } else if (isset($o->bild[0]->date_created)) {
-//                if (isset($o->bild) and count($o->bild)) {
-//                    $data->put("decade", $this->_get_decade($o->bild[0]->date_created));
-//                }
-//            }
-//        }
-//
-//        function _parse_blocks($o, \esa_item\data $data) {
-//            $blocks = array(
+        /**
+         * @param $source
+         * @param array $term_collector
+         */
+        private function _parse_date($source, array &$term_collector) {
+
+            if (isset($source->original_datum)) {
+                $this->_collect_single_language_term_as_triple($term_collector, 'time', 'decade', $this->_get_decade($source->original_datum->_from));
+                $this->_collect_single_language_term_as_triple($term_collector, 'time', 'year', date("Y", strtotime($source->original_datum->_from)));
+            } else if (isset($source->bild[0]->date_created)) {
+                if (isset($source->bild) and count($source->bild)) {
+                    $this->_collect_single_language_term_as_triple($term_collector, 'time', 'decade', $this->_get_decade($source->bild[0]->date_created));
+                    $this->_collect_single_language_term_as_triple($term_collector, 'time', 'year', date("Y", strtotime($source->bild[0]->date_created)));
+                }
+            }
+        }
+
+
+        /**
+         * @param string $date_string
+         * @return string
+         */
+        private function _get_decade(string $date_string) {
+
+            $year = date("Y", strtotime($date_string));
+            return substr($year, 0, 3) . "0s";
+        }
+
+        /**
+         * @param $source
+         * @param array $term_collector
+         */
+        private function _parse_blocks($source, array &$term_collector) {
+
+            $blocks = array(
 //                "template"  => "art_der_vorlage_id",
 //                "state"     => "bearbeitungsstatus_id",
-//                "motive"    => "art_des_motivs_id_old",
+                "subject"    => "art_des_motivs_id_old",
 //                "place"     => "ort_des_motivs_id",
 //                "provider"  => "anbieter_id",
 //                "creator"   => "ersteller_der_vorlage_id_old",
 //                "material"  => "material_der_vorlage_id"
-//            );
-//
-//            foreach ($blocks as $bname => $block) {
-//                $this->get_detail($data, $bname, $o->$block);
-//            }
-//        }
+            );
 
-//        function _get_decade(string $datestring) {
-//            $year = date("Y", strtotime($datestring));
-//            return substr($year, 0, 3) . "0s";
-//        }
+            foreach ($blocks as $taxonomy => $block) {
+                $this->_parse_detail_to_terms($source->$block, $term_collector, $taxonomy, $taxonomy);
+            }
+        }
 
 
         /**
-         * @param $o
+         * @param $source
          * @param array $meta_collector
          * @param array $term_collector
          * @throws \Exception
          */
-        function _parse_place($o, array &$meta_collector, array &$term_collector)  {
+        function _parse_place($source, array &$meta_collector, array &$term_collector)  {
 
-            if (!isset($o->ort_des_motivs_id)) {
+            if (!isset($source->ort_des_motivs_id)) {
                 $this->log("no place connected", "info");
                 return;
             }
 
-            $soid = $o->ort_des_motivs_id->_system_object_id;
+            $soid = $source->ort_des_motivs_id->_system_object_id;
 
             $this->log("parsing place $soid", "info");
 
@@ -523,18 +539,14 @@ namespace shap_datasource {
              * TODO query gazetteer to get the localized names?
              * for now we import three times the same place for each language
              */
-            $term_collector['places']['place'] = array();
-            $term_collector['places']['place'][0] = array_map(function($dummy) {return array();}, array_flip($this->_language_map));
-            foreach ($term_collector['places']['place'][0] as $easydb_language => $terms) {
-                $term_collector['places']['place'][0][$easydb_language] = array(
-                    "value"         => $gazId->displayName,
-                    "latitude"      => $gazId->position->lat,
-                    "longitude"     => $gazId->position->lng,
-                    "gazetteer_id"  => $gazId->gazId
-                );
-            }
+            $this->_collect_single_language_term_as_triple($term_collector, 'places', 'place', array(
+                "value"         => $gazId->displayName,
+                "latitude"      => $gazId->position->lat,
+                "longitude"     => $gazId->position->lng,
+                "gazetteer_id"  => $gazId->gazId
+            ));
 
-            $this->log('$term_collector' . shap_debug($term_collector));
+            //$this->log('$term_collector' . shap_debug($term_collector));
 
             /**
              * to store this information in post as is redundant, but we don't have the time yet to develop geographical
@@ -547,6 +559,28 @@ namespace shap_datasource {
                 $meta_collector[$lang]["place_name"]     =   $gazId->displayName;
             }
 
+        }
+
+        /**
+         * @param array $term_collector
+         * @param string $taxonomy
+         * @param string $taxonomy
+         * @param string $term_group
+         * @param $value
+         */
+        private function _collect_single_language_term_as_triple(array &$term_collector, string $taxonomy, string $term_group, $value) {
+
+            if (!isset($term_collector[$taxonomy][$term_group])) {
+                $term_collector[$taxonomy][$term_group] = array();
+            }
+
+            $triple = array_map(function($dummy) {return array();}, array_flip($this->_language_map));
+
+            foreach ($triple as $easydb_language => $terms) {
+                $triple[$easydb_language] = $value; // as long as $value is just an array and not some class, we don't need to clone
+            }
+
+            $term_collector[$taxonomy][$term_group][] = $triple;
         }
 
 //        function _parse_tags($o, \esa_item\data $data) {
@@ -791,7 +825,7 @@ namespace shap_datasource {
 
             $terms = array_map(function($dummy) {return array();}, $this->_language_map);
 
-            $this->log("collected terms: " . shap_debug($tag_array), "debug");
+            //$this->log("collected terms: " . shap_debug($tag_array), "debug");
 
             foreach ($tag_array as $taxonomy => $term_sets) {
 
@@ -814,11 +848,11 @@ namespace shap_datasource {
                                 continue;
                             }
 
-                            $params["slug"] = implode('_', array(
+                            $params["slug"] = wp_unique_term_slug(implode('_', array(
                                 $this->_create_slug($term_set_key),
                                 $this->_create_slug($term_value),
                                 $wp_language
-                            ));
+                            )), "");
                             $term_meta["shap_imported"] = time();
                             $term_meta["identity"] = implode('-', array(
                                 rawurlencode($taxonomy),
