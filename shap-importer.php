@@ -63,6 +63,7 @@ require_once("functions/datasources.php");
 require_once("functions/metabox.php");
 require_once("functions/keywords.php");
 require_once("functions/template_functions.php");
+require_once("functions/import_api.php");
 require_once("shap_datasource.class.php");
 
 

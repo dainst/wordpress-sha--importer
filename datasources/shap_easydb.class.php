@@ -1,6 +1,5 @@
 <?php
 
-
 namespace shap_datasource {
 
     class shap_easydb extends abstract_datasource {

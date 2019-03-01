@@ -36,7 +36,7 @@ add_action('admin_menu', function () {
                 $ds = shap_get_datasource($_POST['shap_ds_type']);
                 $check = $error = $ds->dependency_check();
                 if (!$check) {
-                    echo "<div class='error'>Pre-Import-Check-Failed: <pre>$check</pre></div>";
+                    echo "<div class='error'>Pre-Import-Check failed: <pre>$check</pre></div>";
                     $success = false;
                 } else {
                     $success = $ds->fetch(0, true);
@@ -54,7 +54,7 @@ add_action('admin_menu', function () {
                 echo "<div class='button' id='shap-import-start'>Start</div>";
             } else {
                 echo "<strong>Errors</strong><br>";
-                $ds->show_errors();
+                if ($ds) $ds->show_errors();
             }
 
             echo "<div id='shap-import-status'></div>";
