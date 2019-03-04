@@ -843,7 +843,8 @@ namespace shap_datasource {
                             $params["description"] = "Imported from EasyDB\n" . date("d.m.Y h:i:s");
 
                             if (!$term_value) {
-                                $this->error("Term $taxonomy->$term_set_key->$triple_nr->$wp_language has no value:" . shap_debug($tag_value_triple));
+                                $this->error("Term $taxonomy->$term_set_key->$triple_nr->$wp_language has no value:");
+                                $this->log(shap_debug($tag_value_triple), 'debug');
                                 continue;
                             }
 
