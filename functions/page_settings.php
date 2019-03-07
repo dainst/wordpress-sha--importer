@@ -20,6 +20,7 @@ add_action('admin_menu', function() {
 
         echo "<input type='text' name='shap_db_url'  value='{$values['shap_db_url']}'>";
         echo "<label for='shap_db_url'><strong>/api/v1</strong> URL</label><br>";
+        echo "<p>Leave out username and passwort for anonymous login</p>";
         echo "<input type='text' name='shap_db_user' value='{$values['shap_db_user']}'>";
         echo "<label for='shap_db_user'>Username</label><br>";
         echo "<input type='text' name='shap_db_pass' value='{$values['shap_db_pass']}'>";
@@ -31,6 +32,11 @@ add_action('admin_menu', function() {
         echo "</form>";
 
         echo "</div>";
+
+
+        echo shap_debug(get_option("wpml_tax_slug_translation_settings"));
+        echo "<hr>";
+        echo shap_debug(get_option("icl_sitepress_settings"));
 
     });
 });

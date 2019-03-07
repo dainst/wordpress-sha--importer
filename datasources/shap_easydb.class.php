@@ -44,8 +44,40 @@ namespace shap_datasource {
                 throw new \Exception('PHP Curl extension not installed');
             }
             $this->get_easy_db_session_token();
+            $this->_check_wmpl_settings();
             return 'O. K.';
         }
+
+        /**
+         * @throws \Exception
+         */
+        private function _check_wmpl_settings() {
+
+            global $shap_taxonomies;
+
+            if (!function_exists("wpml_get_content_translations")) {
+                throw new \Exception("WMPL Plugin seems not to be installed");
+            }
+
+            $wpml_settings = get_option("icl_sitepress_settings");
+            $wpml_tax_settings = $wpml_settings['taxonomies_sync_option'];
+
+            foreach ($shap_taxonomies as $tax => $tax_name) {
+                if ((int) $wpml_tax_settings["shap_$tax"] != 2) {
+                    throw new \Exception("WMPL Settings are not correct. <a href='/wp-admin/admin.php?page=wpml-translation-management%2Fmenu%2Fsettings'>Set 'shap_$tax' to 'Translatable - use translation if available or fallback to default language'</a>");
+                }
+            }
+
+            $wpml_post_type_settings = $wpml_settings['custom_posts_sync_option'];
+
+            if ((int) $wpml_post_type_settings['attachment'] != 2) {
+                throw new \Exception("WMPL Settings are not correct. <a href='/wp-admin/admin.php?page=wpml-translation-management%2Fmenu%2Fsettings'>Set 'attachment' to 'Translatable - use translation if available or fallback to default language'</a>");
+            }
+
+
+
+        }
+
 
         /**
          * @param $msg
@@ -681,10 +713,16 @@ namespace shap_datasource {
 
             global $wpdb;
 
+            $trid = wpml_get_content_trid( "tax_$taxonomy", $from_term_id);
+
+            if ($trid == 0) {
+                throw new \Exception("Could not get trid for tax_$taxonomy/$from_term_id");
+            }
+
             $update = $wpdb->update(
                 $wpdb->prefix.'icl_translations',
                 array(
-                    'trid' => wpml_get_content_trid( "tax_$taxonomy", $from_term_id),
+                    'trid' => $trid,
                     'element_type' => "tax_$taxonomy",
                     'source_language_code' => $from_wp_language,
                     'language_code' => $to_wp_language
@@ -696,7 +734,7 @@ namespace shap_datasource {
             );
 
             if (!$update) {
-                throw new \Exception("Could not insert data to icl_translations table: $wpdb->last_error" . shap_debug($wpdb->last_query));
+                throw new \Exception("Could not insert data to icl_translations table: {$wpdb->last_error}" . shap_debug($wpdb->last_query));
             }
 
         }
@@ -843,7 +881,7 @@ namespace shap_datasource {
                             $params["description"] = "Imported from EasyDB\n" . date("d.m.Y h:i:s");
 
                             if (!$term_value) {
-                                $this->error("Term $taxonomy->$term_set_key->$triple_nr->$wp_language has no value:");
+                                $this->log("Term $taxonomy->$term_set_key->$triple_nr->$wp_language has no value:", "warning");
                                 $this->log(shap_debug($tag_value_triple), 'debug');
                                 continue;
                             }
