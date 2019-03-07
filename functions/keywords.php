@@ -23,6 +23,7 @@ add_action('init', function() {
                 'hierarchical'          => false,
                 'show_ui'               => true,
                 'show_admin_column'     => false,
+                'show_in_modal'         => false,
                 'query_var'             => true,
             )
         );

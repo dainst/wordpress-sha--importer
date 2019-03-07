@@ -43,6 +43,9 @@ namespace shap_datasource {
             if (!$this->check_for_curl()) {
                 throw new \Exception('PHP Curl extension not installed');
             }
+            if (!isset($this->_easydb_url) or !$this->_easydb_url) {
+                throw new \Exception('No Easy-DB URL set.');
+            }
             $this->get_easy_db_session_token();
             $this->_check_wmpl_settings();
             return 'O. K.';
@@ -74,6 +77,17 @@ namespace shap_datasource {
                 throw new \Exception("WMPL Settings are not correct. <a href='/wp-admin/admin.php?page=wpml-translation-management%2Fmenu%2Fsettings'>Set 'attachment' to 'Translatable - use translation if available or fallback to default language'</a>");
             }
 
+            $default_language = wpml_get_default_language();
+
+            if ($default_language != "en") {
+                throw new \Exception("Default Language must be english");
+            }
+
+            $current_language = wpml_get_current_language();
+
+            if (!in_array($current_language, array('all', 'en'))) {
+                throw new \Exception("Please select 'All languages' or default language 'en' in the admin bar above while importing.");
+            }
 
 
         }
@@ -658,13 +672,19 @@ namespace shap_datasource {
 
             $translated_posts = wpml_get_content_translations("post_attachment", $post_id);
 
+            $original_post = get_post($post_id);
+
             foreach ($translated_posts as $wp_language => $translated_post_id) {
 
                 $new_post = array(
                     'ID'             => $translated_post_id,
                     'post_title'     => $this->_get_best_field($object, $this->_language_map[$wp_language], $fields = array('ueberschrift', 'titel'), "Image #$system_object_id ($wp_language)"),
                     'post_content'   => $this->_get_best_field($object, $this->_language_map[$wp_language], $fields = array('beschreibung'), ""),
-                    'post_type'      => "attachment"
+                    'post_type'      => "attachment",
+                    "post_mime_type" => $original_post->post_mime_type,
+                    "comment_status" => $original_post->comment_status,
+                    "comment_count"  => $original_post->comment_count,
+                    "author"         => $original_post->post_author
                 );
                 $id = wp_insert_post($new_post, true);
 

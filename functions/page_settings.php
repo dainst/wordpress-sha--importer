@@ -4,6 +4,17 @@ add_action('admin_menu', function() {
 
     add_submenu_page(SHAP_FILE, 'Settings', 'Settings', 'administrator', SHAP_FILE . '-settings', function () {
 
+        $ds = shap_get_datasource('shap_easydb');
+        try {
+            $check = $ds->dependency_check();
+            $class = "notice-success";
+        } catch (Exception $exception) {
+            $check = $exception->getMessage();
+            $class = "notice-error";
+        }
+
+        echo "<div class='notice $class'>Plugin health status: $check</div>";
+
         $url = admin_url('admin.php');
 
         echo "<div class='wrap' id='esa_settings'>";
@@ -34,9 +45,6 @@ add_action('admin_menu', function() {
         echo "</div>";
 
 
-        echo shap_debug(get_option("wpml_tax_slug_translation_settings"));
-        echo "<hr>";
-        echo shap_debug(get_option("icl_sitepress_settings"));
 
     });
 });
