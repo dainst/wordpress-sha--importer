@@ -280,7 +280,6 @@ namespace shap_datasource {
             $this->_parse_pool($object, $term_collector);
 //            $this->_parse_tags($json_response[0], $data);
 
-//            $html = $image->render();
 
             $wp_terms = $this->_add_terms_to_wp($term_collector);
 
@@ -327,7 +326,8 @@ namespace shap_datasource {
                 'post_mime_type' => $file_type['type'],
                 'post_title'     => "[temporary title for #$system_object_id]",
                 'post_content'   => '',
-                'post_status'    => 'inherit'
+                'post_status'    => 'inherit',
+                'post_author'    => get_option('shap_wp_user')
             );
 
             if ($duplicate_id) {
@@ -635,7 +635,6 @@ namespace shap_datasource {
             }
 
             foreach ($obj->names as $name) {
-                $this->log($name->language . '|' . (isset($this->_language_map_gazetteer[$name->language])?"Y":"N") . '|' . ($triple[$this->_language_map_gazetteer[$name->language]]?'y':'n'));
                 if (isset($this->_language_map_gazetteer[$name->language]) and !$triple[$this->_language_map_gazetteer[$name->language]]) {
                     $triple[$this->_language_map_gazetteer[$name->language]] = $name->title;
                 }
@@ -723,7 +722,7 @@ namespace shap_datasource {
                     "post_mime_type" => $original_post->post_mime_type,
                     "comment_status" => $original_post->comment_status,
                     "comment_count"  => $original_post->comment_count,
-                    "author"         => $original_post->post_author
+                    "post_author"    => get_option('shap_wp_user')
                 );
                 $id = wp_insert_post($new_post, true);
 

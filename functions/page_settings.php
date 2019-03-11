@@ -29,6 +29,7 @@ add_action('admin_menu', function() {
             $values[$setting] = get_option($setting);
         }
 
+        echo "<p>Easydb Settings</p>";
         echo "<input type='text' name='shap_db_url'  value='{$values['shap_db_url']}'>";
         echo "<label for='shap_db_url'><strong>/api/v1</strong> URL</label><br>";
         echo "<p>Leave out username and passwort for anonymous login</p>";
@@ -36,9 +37,12 @@ add_action('admin_menu', function() {
         echo "<label for='shap_db_user'>Username</label><br>";
         echo "<input type='text' name='shap_db_pass' value='{$values['shap_db_pass']}'>";
         echo "<label for='shap_db_pass'>Password</label><br>";
-
+        echo "<p>Other Settings</p>";
+        wp_dropdown_users(array('name' => 'shap_wp_user',  'selected' => get_option('shap_wp_user')));
+        echo "<label for='shap_db_pass'>Import as user</label><br>";
         wp_nonce_field('shap_save_settings', 'shap_save_settings_nonce');
         echo "<input type='hidden' name='action' value='shap_save_settings'>";
+        echo "<p></p>";
         echo "<input type='submit' value='Save' class='button button-primary'>";
         echo "</form>";
 
@@ -54,7 +58,7 @@ add_action('admin_action_shap_save_settings' ,function() {
         die("<div class='error'>Nonce failed</div>");
     }
 
-    $settings = array('shap_db_url', 'shap_db_user', 'shap_db_pass');
+    $settings = array('shap_db_url', 'shap_db_user', 'shap_db_pass', 'shap_wp_user');
 
     foreach ($settings as $setting) {
         $value = (isset($_POST[$setting])) ? $_POST[$setting] : 0;
