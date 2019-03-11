@@ -22,9 +22,16 @@ add_action('init', function() {
                 'rewrite'               => array('slug' => $name),
                 'hierarchical'          => false,
                 'show_ui'               => true,
+                'show_in_menu'          => true,
                 'show_admin_column'     => false,
                 'show_in_modal'         => false,
                 'query_var'             => true,
+                'capabilities' => array (
+                    'manage_terms' => 'edit_posts',
+                    'edit_terms' => 'edit_posts',
+                    'delete_terms' => 'edit_posts',
+                    'assign_terms' => 'edit_posts'
+                )
             )
         );
     }
