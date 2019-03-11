@@ -14,11 +14,19 @@ namespace shap_datasource {
         private $_easydb_user = "";
         private $_easydb_pass = "";
 
-        private $_language_map = array(
+        private $_language_map = array( // wp-language -> easydb-language
             'ar' => 'ar',
             'de' => "de-DE",
             'en' => "en-US"
         );
+
+        private $_language_map_gazetteer = array( // gaz. lang -> easydb-langauge
+            'ara' => 'ar',
+            'deu' => "de-DE",
+            'eng' => "en-US"
+        );
+
+
 
         /**
          * shap_easydb constructor.
@@ -580,16 +588,20 @@ namespace shap_datasource {
             }
 
             /**
-             * unfortunately $gazId->otherNames are not localized in easydb, so we can't import the place names localized
-             * TODO query gazetteer to get the localized names?
-             * for now we import three times the same place for each language
+             * unfortunately $gazId->otherNames are not localized in easydb, so we have to query gazetteer to get the localized names
              */
-            $this->_collect_single_language_term_as_triple($term_collector, 'places', 'place', array(
-                "value"         => $gazId->displayName,
-                "latitude"      => $gazId->position->lat,
-                "longitude"     => $gazId->position->lng,
-                "gazetteer_id"  => $gazId->gazId
-            ));
+            $triple = $this->_get_tranlsations_from_gazetteer($gazId->gazId);
+
+            foreach ($triple as $language => $value) {
+                $triple[$language] = array(
+                    "value"         => $value ? $value : $gazId->displayName,
+                    "latitude"      => $gazId->position->lat,
+                    "longitude"     => $gazId->position->lng,
+                    "gazetteer_id"  => $gazId->gazId
+                );
+             }
+
+            $term_collector['places']['place'][] = $triple;
 
             //$this->log('$term_collector' . shap_debug($term_collector));
 
@@ -606,9 +618,36 @@ namespace shap_datasource {
 
         }
 
+        private function _get_tranlsations_from_gazetteer($gazId) : array {
+            $url = "https://gazetteer.dainst.org/search.json?q=%7B%22bool%22:%7B%22must%22:%5B%20%7B%20%22match%22:%20%7B%20%22_id%22:%20$gazId%20%7D%7D%5D%7D%7D&type=extended";
+            //$url = "http://gazetteer.dainst.org/doc/$gazId.json";
+
+            $this->log("Fetching Place information from Gazetteer: $gazId");
+
+            $triple = array_map(function($dummy) {return false;}, array_flip($this->_language_map));
+
+            try {
+                $obj = $this->_json_decode($this->_fetch_external_data($url));
+                $obj = $obj->result[0];
+            } catch (\Exception $e) {
+                $this->log("Could not get place vom iDAI.gazetteer ($url): " . $e->getMessage(), "warning");
+                return $triple;
+            }
+
+            foreach ($obj->names as $name) {
+                $this->log($name->language . '|' . (isset($this->_language_map_gazetteer[$name->language])?"Y":"N") . '|' . ($triple[$this->_language_map_gazetteer[$name->language]]?'y':'n'));
+                if (isset($this->_language_map_gazetteer[$name->language]) and !$triple[$this->_language_map_gazetteer[$name->language]]) {
+                    $triple[$this->_language_map_gazetteer[$name->language]] = $name->title;
+                }
+            }
+
+            //$this->log(shap_debug($triple));
+
+            return $triple;
+        }
+
         /**
          * @param array $term_collector
-         * @param string $taxonomy
          * @param string $taxonomy
          * @param string $term_group
          * @param $value
