@@ -4,12 +4,12 @@
  * @subpackage	Search in Datasources | Abstract Datasource Class
  * @link 		https://github.com/dainst/wordpress-storytelling
  * @author 		Philipp Franck
- * 
- * 
- * Every datasource wich is connected to the Eagle Story Telling Application (such as europeana, iDai 
+ *
+ *
+ * Every datasource wich is connected to the Eagle Story Telling Application (such as europeana, iDai
  * Gazetteer etc.) is an implementation of this abstract class.
- * 
- * 
+ *
+ *
  */
 
 
@@ -17,19 +17,19 @@
 namespace shap_datasource {
 	abstract class abstract_datasource {
 
-		public $debug = false;
+		public $debug = true;
 
 		protected $results = array();
 
 		// saves current search params
 		public $id;
 		public $params = array();
-		
+
 		// pagination data
 		public $page = 1; //current page
 		public $pages = false; // number of pages. false means: unknown
-        public $items_per_page = 1;
-		
+    public $items_per_page = 1;
+
 		// log collector
 		public $log = array();
 
@@ -51,10 +51,10 @@ namespace shap_datasource {
          * @param bool $test
          * @return true or false depending to success;
          */
-		function fetch(int $page = 0, $test = false) : bool {
+		function fetch(int $page = 0, $ids = false, $test = false) : bool {
 			try {
 
-                $queryurl = $this->api_fetch_url($page);
+                $queryurl = $this->api_fetch_url($page, $ids);
 
                 if ($this->debug) {
                     echo shap_debug($queryurl);
@@ -95,17 +95,17 @@ namespace shap_datasource {
          * @throws \Exception
          */
 		function _generic_api_call($url) {
-			
+
 			if (!$url) {
 				throw new \Exception('No Query: ' . $url);
 			}
-				
+
 			$response = $this->_fetch_external_data($url);
-			
+
 			if ($this->debug) {
                 echo "url: ", shap_debug($url), "POST:", shap_debug($_POST), "Response:", shap_debug((array) json_decode($response));
 			}
-			
+
 			return $response;
 		}
 
@@ -121,9 +121,9 @@ namespace shap_datasource {
          * @return array
          */
 		abstract function parse_result_set($result, bool $test = false) : array;
-		
+
 		abstract function parse_result($result);
-		
+
 		abstract function api_single_url($id, $params = array()) : string;
 
 		abstract function api_record_url($id, $params = array()) : string;
@@ -131,9 +131,9 @@ namespace shap_datasource {
 		abstract function api_fetch_url(int $page);
 
 		/**
-		 * 
+		 *
 		 * register error message
-		 * 
+		 *
 		 * @param string $error_text
 		 */
 		protected function error($error_text) {
@@ -162,7 +162,7 @@ namespace shap_datasource {
 			}
 			echo "</div>";
 		}
-		
+
 		/**
 		 * if the functionality of the datasource relies onto something special like specific php libraries or external software,
 		 * you can implement a dependency check on wose result the availability in wordpress depends.
@@ -234,7 +234,7 @@ namespace shap_datasource {
                 }
 
                 $ch = curl_init();
-				
+
 				curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 				curl_setopt($ch, CURLOPT_URL, $url->url);
 
@@ -260,7 +260,7 @@ namespace shap_datasource {
                 }
 
 				$response = curl_exec($ch);
-				
+
 				if(curl_errno($ch)) {
                     throw new \Exception('Curl Error: ' . curl_error($ch));
                 }
@@ -279,12 +279,12 @@ namespace shap_datasource {
 
 				return $response;
 			}
-		
-			
+
+
 			if (!$data = file_get_contents($url)) {
 				throw new \Exception("no response to $url!");
 			}
-			
+
 			return $data;
 		}
 
@@ -349,10 +349,10 @@ namespace shap_datasource {
 			return $dec;
 		}
 
-		
+
 	}
 }
-	
+
 
 
 
