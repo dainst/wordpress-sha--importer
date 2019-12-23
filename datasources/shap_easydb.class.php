@@ -181,38 +181,29 @@ namespace shap_datasource {
          * @return object
          * @throws \Exception
          */
-        function api_fetch_url(int $page = 0) {
+        function api_fetch_url(int $page = 0, $ids = false) {
 
             $this->get_easy_db_session_token();
 
             $search = array(
                 "limit" => $this->items_per_page,
                 "objecttypes" => array("bilder"),
-	            "generate_rights" => false,
-                "sort" => array(
-                    array(
-                        "field" =>"_system_object_id"
-                    )
-                )
-            );
-
-            //            if (!in_array($query, array("", "*"))) {
-            //                $search["search"] = array(
-            //                    array(
-            //                        "type" => "match",
-            //                        "mode" => "token",
-            //                        "string"=> $query,
-            //                        "phrase"=> true
-            //                    )
-            //                );
-            //            }
-
+  	            "generate_rights" => false,
+                  "sort" => array(
+                      array(
+                          "field" =>"_system_object_id"
+                      )
+                  )
+              );
 
             $search['offset'] = $page * $this->items_per_page;
 
+            // if we have IDs we limit the search
+            $limit_to_ids = ($ids !== false ? "&system_object_ids=$ids" : "");
+
             return (object) array(
                 'method' => 'post',
-                'url' => "{$this->_easydb_url}/api/v1/search?token={$this->_session_token}",
+                'url' => "{$this->_easydb_url}/api/v1/search?token={$this->_session_token}&$limit_to_ids",
                 'post_json' => $search
             );
         }
