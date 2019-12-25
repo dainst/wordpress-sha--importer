@@ -7,6 +7,9 @@ add_action('add_meta_boxes', function() {
     $editable_attributes = array(
         'shap_easydb_id',
         'shap_copyright_vermerk',
+        'shap_nested_field',
+        'shap_the_time',
+        'shap_place_name',
         'shap_longitude',
         'shap_latitude',
         'shap_gazetteer_id'
@@ -47,7 +50,7 @@ add_action('add_meta_boxes', function() {
             }
 
             if (isset($meta['_shap_easydb_id']) or isset($meta['shap_easydb_id'])) {
-                $update_id = isset($meta['_shap_easydb_id']) ? $meta['_shap_easydb_id'][0] : $meta['shap_easydb_id'];
+                $update_id = isset($meta['_shap_easydb_id']) ? $meta['_shap_easydb_id'][0] : $meta['shap_easydb_id'][0];
                 $url = $ds->api_record_url($update_id);
                 $outline .= "<a href='$url' target='_blank'>View in EasyDb</a>";
             }
