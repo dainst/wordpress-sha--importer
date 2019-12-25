@@ -173,7 +173,7 @@ namespace shap_datasource {
          * @return string
          */
         function api_record_url($id, $params = array()) : string {
-            return "{$this->_easydb_url}/lists/bilder/id/global_object_id/$id";
+            return "{$this->_easydb_url}detail/$id";
         }
 
         /**
@@ -264,12 +264,24 @@ namespace shap_datasource {
             $term_collector = $this->_init_term_collector();
             $this->_parse_place($object, $meta_collector, $term_collector);
             $this->_parse_field_to_meta($object->copyright_vermerk, $meta_collector, "copyright_vermerk");
+            //$this->_parse_field_to_meta($object->beschreibung, $meta_collector, "quelle_old");
+            //$this->_parse_field_to_meta($object->titel, $meta_collector, "quelle_old");
             $this->_parse_nested($object, $term_collector);
 
             $this->_parse_blocks($object, $term_collector);
             $this->_parse_date($object, $term_collector);
+
+            // SHAP extrafields
+            $this->_parse_custom_single_to_triple($meta_collector, "easydb_id", $system_object_id);
+            // nested field with lang key better use _parse_field_to_meta
+            $this->_parse_custom_single_to_triple($meta_collector, "nested_field", json_encode($json_response[0]->_standard->{'1'}->text->{'de-DE'}));
+            $this->_parse_custom_single_to_triple($meta_collector, "the_time", $json_response[0]->_changelog[0]->time);
+
+            // parse nested field which has lang keys
+            $this->_parse_field_to_meta($json_response[0]->_standard->{'1'}->text, $meta_collector, "standard_extra_field");
+
             $this->_parse_pool($object, $term_collector);
-//            $this->_parse_tags($json_response[0], $data);
+            // $this->_parse_tags($json_response[0], $data);
 
 
             $wp_terms = $this->_add_terms_to_wp($term_collector);
@@ -502,7 +514,6 @@ namespace shap_datasource {
          * @param array $term_collector
          */
         private function _parse_date($source, array &$term_collector) {
-
             if (isset($source->original_datum)) {
                 $this->_collect_single_language_term_as_triple($term_collector, 'time', 'decade', $this->_get_decade($source->original_datum->_from));
                 $this->_collect_single_language_term_as_triple($term_collector, 'time', 'year', date("Y", strtotime($source->original_datum->_from)));
@@ -594,6 +605,7 @@ namespace shap_datasource {
 
             $term_collector['places']['place'][] = $triple;
 
+
             //$this->log('$term_collector' . shap_debug($term_collector));
 
             /**
@@ -607,6 +619,24 @@ namespace shap_datasource {
                 $meta_collector[$lang]["place_name"]     =   $gazId->displayName;
             }
 
+        }
+
+
+        /**
+         * @param array $meta_collector
+         * @param string $custom_field_name
+         * @param string $custom_field_value
+         * @throws \Exception
+         */
+        function _parse_custom_single_to_triple(array &$meta_collector, string $custom_field_name, string $custom_field_value)  {
+
+            if (!isset($custom_field_name) || !isset($custom_field_value)) {
+                return;
+            }
+
+            foreach ($meta_collector as $lang => $lang_meta) {
+                $meta_collector[$lang][$custom_field_name] = trim($custom_field_value,'"');
+            }
         }
 
         private function _get_tranlsations_from_gazetteer($gazId) : array {
