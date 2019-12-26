@@ -713,9 +713,15 @@ namespace shap_datasource {
          */
         private function _update_meta($post_id, $meta) {
 
-            foreach ($meta as $key => $value) {
-                add_post_meta($post_id, "shap_$key", $value, true);
-            }
+          $the_post = wp_is_post_revision( $post_id );
+          if ( $the_post ) {
+              $post_id = $the_post;
+          }
+
+          foreach ($meta as $key => $value) {
+              //add_post_meta($post_id, "shap_$key", $value, true);
+              update_post_meta($post_id, "shap_$key", $value, $prev_value = '');
+          }
         }
 
 
