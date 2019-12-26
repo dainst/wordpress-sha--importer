@@ -173,7 +173,7 @@ namespace shap_datasource {
          * @return string
          */
         function api_record_url($id, $params = array()) : string {
-            return "{$this->_easydb_url}detail/$id";
+            return "{$this->_easydb_url}/detail/$id";
         }
 
         /**
@@ -572,6 +572,7 @@ namespace shap_datasource {
             }
 
             $soid = $source->ort_des_motivs_id->_system_object_id;
+            //$gazId = $source->ort_des_motivs_id->gazId;
 
             $this->log("parsing place $soid", "info");
 
@@ -583,23 +584,28 @@ namespace shap_datasource {
                 return;
             }
 
+            // get shape from idai
             $gazId = $place->ortsthesaurus->gazetteer_id;
+            $get_shape_from_gazeteer = $this->_get_shape_from_gazetteer($gazId->gazId);
 
             if (!isset($gazId->position)) {
                 return;
             }
 
+            $this->log("parsing place XX " . json_encode($place->ortsthesaurus->beschreibung->{'de-DE'}), "info");
+
             /**
              * unfortunately $gazId->otherNames are not localized in easydb, so we have to query gazetteer to get the localized names
              */
             $triple = $this->_get_tranlsations_from_gazetteer($gazId->gazId);
-
             foreach ($triple as $language => $value) {
                 $triple[$language] = array(
                     "value"         => $value ? $value : $gazId->displayName,
                     "latitude"      => $gazId->position->lat,
                     "longitude"     => $gazId->position->lng,
-                    "gazetteer_id"  => $gazId->gazId
+                    "shape"         => $get_shape_from_gazeteer,
+                    "gazetteer_id"  => $gazId->gazId,
+                    "beschreibung"  => $place->ortsthesaurus->beschreibung->{$language}
                 );
              }
 
@@ -664,6 +670,30 @@ namespace shap_datasource {
             //$this->log(shap_debug($triple));
 
             return $triple;
+        }
+
+        /**
+         * @param string $gazId
+         * @return string $shape
+         * @throws \Exception
+         */
+        private function _get_shape_from_gazetteer($gazId) : string{
+            $url = "https://gazetteer.dainst.org/search.json?q=%7B%22bool%22:%7B%22must%22:%5B%20%7B%20%22match%22:%20%7B%20%22_id%22:%20$gazId%20%7D%7D%5D%7D%7D&type=extended";
+            $shape = "none";
+            $this->log("Fetching Shape information from Gazetteer: $gazId");
+
+            try {
+                $obj = $this->_json_decode($this->_fetch_external_data($url));
+                $obj = $obj->result[0];
+                if ($obj->prefLocation->shape){
+                  $shape = json_encode($obj->prefLocation->shape);
+                }
+                $this->log($shape);
+            } catch (\Exception $e) {
+                $this->log("Could not get shape vom iDAI.gazetteer ($url): " . $e->getMessage(), "warning");
+                return $shape;
+            }
+            return $shape;
         }
 
         /**
@@ -938,7 +968,6 @@ namespace shap_datasource {
         private function _add_terms_to_wp(array $tag_array) {
 
             $default_language = wpml_get_default_language();
-
             // double check if order of languages was set correctly (theoretically redundant)
             if (array_keys($this->_language_map)[0] != $default_language) {
                 $first = array_keys($this->_language_map)[0];
@@ -963,7 +992,9 @@ namespace shap_datasource {
                                 ? array($tag_value_triple[$easydb_language]['value'], $tag_value_triple[$easydb_language])
                                 : array($tag_value_triple[$easydb_language], array());
                             $params = array();
-                            $params["description"] = "Imported from EasyDB\n" . date("d.m.Y h:i:s");
+                            //$params["description"] = "Imported from EasyDB\n" . date("d.m.Y h:i:s");
+                            $multilanguage_description = $tag_array['places']['place'][0][$easydb_language]['beschreibung'];
+                            $params["description"] = $multilanguage_description;
 
                             if (!$term_value) {
                                 $this->log("Term $taxonomy->$term_set_key->$triple_nr->$wp_language has no value:", "warning");

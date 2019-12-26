@@ -40,8 +40,8 @@ add_action('init', function() {
     add_action('shap_places_edit_form_fields', function($term, $taxonomy) {
 
         $meta = get_term_meta($term->term_id);
-
-        $display_meta = array("gazetteer_id", "latitude", "longitude");
+        // NOTE This are options for place metadata
+        $display_meta = array("gazetteer_id", "latitude", "longitude","shape");
 
         echo "<tr class=''><th scope='row'>SHAP Metadata</th><td>";
 
