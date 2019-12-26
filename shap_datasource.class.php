@@ -28,7 +28,8 @@ namespace shap_datasource {
 		// pagination data
 		public $page = 1; //current page
 		public $pages = false; // number of pages. false means: unknown
-    public $items_per_page = 1;
+		// TODO this needs to be 4?
+		public $items_per_page = 1;
 
 		// log collector
 		public $log = array();

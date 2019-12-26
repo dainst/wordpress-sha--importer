@@ -31,6 +31,7 @@ add_action('rest_api_init', function() {
                 return new WP_Error(500, "Error: " . $exception->getMessage());
             }
 
+            // if we pass ids for sync we use a limit of 100 else 4
             $ds->items_per_page = ($ids ? 100 : 4);
             //$ds->items_per_page = 4;
             $success = $ds->fetch($page,$ids);
