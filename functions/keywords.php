@@ -41,7 +41,7 @@ add_action('init', function() {
 
         $meta = get_term_meta($term->term_id);
         // NOTE This are options for place metadata
-        $display_meta = array("gazetteer_id", "latitude", "longitude","shape");
+        $display_meta = array("gazetteer_id", "latitude", "longitude","shape","weitere_namen");
 
         echo "<tr class=''><th scope='row'>SHAP Metadata</th><td>";
 

@@ -278,10 +278,16 @@ namespace shap_datasource {
             $this->_parse_custom_single_to_triple($meta_collector, "the_time", $json_response[0]->_changelog[0]->time);
 
             // parse nested field which has lang keys
-            $this->_parse_field_to_meta($json_response[0]->_standard->{'1'}->text, $meta_collector, "standard_extra_field");
+            //$this->_parse_field_to_meta($json_response[0]->_standard->{'1'}->text, $meta_collector, "standard_extra_field");
 
+            // MIK needed fields
             // Ersteller der Vorlage
             $this->_parse_field_to_meta($json_response[0]->bilder->{'_nested:bilder__erstellerdervorlage_new'}[0]->ersteller_der_vorlage_id->_standard->{'1'}->text, $meta_collector, "ersteller_der_vorlage");
+            // Original Datum
+            $this->_parse_custom_single_to_triple($meta_collector, "original_datum", $json_response[0]->bilder->original_datum->value);
+
+            // Fileclass
+            $this->_parse_field_to_meta($json_response[0]->bilder->{'_nested:bilder__artdervorlage_new'}[1]->art_der_vorlage_id2->_standard->{'1'}->text, $meta_collector, "fileclass");
 
             $this->_parse_pool($object, $term_collector);
             // $this->_parse_tags($json_response[0], $data);
@@ -598,7 +604,8 @@ namespace shap_datasource {
                 return;
             }
 
-            $this->log("parsing place XX " . json_encode($place->ortsthesaurus->beschreibung->{'de-DE'}), "info");
+            // TODO remove again
+            $this->log("parsing place " . json_encode($place->ortsthesaurus->beschreibung->{'de-DE'}), "info");
 
             /**
              * unfortunately $gazId->otherNames are not localized in easydb, so we have to query gazetteer to get the localized names
@@ -611,7 +618,8 @@ namespace shap_datasource {
                     "longitude"     => $gazId->position->lng,
                     "shape"         => $get_shape_from_gazeteer,
                     "gazetteer_id"  => $gazId->gazId,
-                    "beschreibung"  => $place->ortsthesaurus->beschreibung->{$language}
+                    "beschreibung"  => $place->ortsthesaurus->beschreibung->{$language},
+                    "weitere_namen" => $place->ortsthesaurus->weiterenamen->{$language}
                 );
              }
 
