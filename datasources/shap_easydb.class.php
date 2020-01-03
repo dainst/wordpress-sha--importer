@@ -288,6 +288,8 @@ namespace shap_datasource {
 
             // Fileclass
             $this->_parse_field_to_meta($json_response[0]->bilder->{'_nested:bilder__artdervorlage_new'}[1]->art_der_vorlage_id2->_standard->{'1'}->text, $meta_collector, "fileclass");
+            // Subject (Type of subject)
+            $this->_parse_field_to_meta($json_response[0]->bilder->{'_nested:bilder__artdesmotivs_new'}[0]->art_des_motivs_id->_standard->{'1'}->text, $meta_collector, "type_of_subject");
 
             $this->_parse_pool($object, $term_collector);
             // $this->_parse_tags($json_response[0], $data);
