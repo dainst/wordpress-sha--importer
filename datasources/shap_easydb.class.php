@@ -285,7 +285,7 @@ namespace shap_datasource {
             $this->_parse_field_to_meta($json_response[0]->bilder->ueberschrift, $meta_collector, "caption");
 
             // Ersteller der Vorlage
-            $this->_parse_field_to_meta($json_response[0]->bilder->{'_nested:bilder__erstellerdervorlage_new'}[0]->ersteller_der_vorlage_id->_standard->{'1'}->text, $meta_collector, "ersteller_der_vorlage");
+            $this->_parse_field_to_meta($json_response[0]->bilder->{'_nested:bilder__erstellerdervorlage_new'}[0]->ersteller_der_vorlage_id->_standard->{'1'}->text, $meta_collector, "author");
             // Original Datum
             $this->_parse_custom_single_to_triple($meta_collector, "original_datum", $json_response[0]->bilder->original_datum->value);
 
@@ -625,7 +625,8 @@ namespace shap_datasource {
                     "gazetteer_id"  => $gazId->gazId,
                     "beschreibung"  => $place->ortsthesaurus->beschreibung->{$language},
                     "weitere_namen" => $place->ortsthesaurus->weiterenamen->{$language},
-                    "place_hierarchy" => $this->merge_full_path($place->_path, $language),
+                    "place_name"    => $this->_get_single_place_name($place->_path, $language),
+                    "place_hierarchy" => $this->_merge_full_path($place->_path, $language),
                     "gebaeude_typ" => $place->ortsthesaurus->{'_nested:ortsthesaurus__gebaeudetyp'}[0]->lk_gebaeudetyp_id->_standard->{'1'}->text->{$language}
                 );
              }
@@ -718,20 +719,34 @@ namespace shap_datasource {
         }
 
         /**
-         * @param object $object
+         * @param array $source
          * @param string $lang
-         * @param array $term_collector
          */
-        private function _merge_full_path($object, $lang = "en-EN"){
+        private function _merge_full_path($source, $lang = "en-EN"){
             $full_path_string = "";
-            if (is_array($object)){
-                foreach($object as $key => $value){
-                    $full_path_string .= $value->_standard->{'1'}->text->{$lang} ;
+            if (is_array($source) || is_object($source)){
+                foreach($source as $key => $value){
+                    $full_path_string .= "'".$value->_standard->{'1'}->text->{$lang}."'" ;
                     $full_path_string .= ($value->_has_children ? ',':'');
                 }
             }
             return $full_path_string;
         }
+
+        /**
+         * @param array $source
+         * @param string $lang
+         */
+        function _get_single_place_name($source, $lang = "en-EN"){
+            $last_item = "";
+            if (is_array($source)){
+                $last_array_item = end($source);
+                $last_item= $last_array_item->_standard->{'1'}->text->{$lang};
+            }
+            return $last_item;
+        }
+
+
 
         /**
          * @param array $term_collector
