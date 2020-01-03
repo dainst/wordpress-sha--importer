@@ -281,6 +281,9 @@ namespace shap_datasource {
             //$this->_parse_field_to_meta($json_response[0]->_standard->{'1'}->text, $meta_collector, "standard_extra_field");
 
             // MIK needed fields
+            // Subject (Type of subject)
+            $this->_parse_field_to_meta($json_response[0]->bilder->ueberschrift, $meta_collector, "caption");
+
             // Ersteller der Vorlage
             $this->_parse_field_to_meta($json_response[0]->bilder->{'_nested:bilder__erstellerdervorlage_new'}[0]->ersteller_der_vorlage_id->_standard->{'1'}->text, $meta_collector, "ersteller_der_vorlage");
             // Original Datum
