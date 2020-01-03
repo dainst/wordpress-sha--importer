@@ -619,7 +619,8 @@ namespace shap_datasource {
                     "shape"         => $get_shape_from_gazeteer,
                     "gazetteer_id"  => $gazId->gazId,
                     "beschreibung"  => $place->ortsthesaurus->beschreibung->{$language},
-                    "weitere_namen" => $place->ortsthesaurus->weiterenamen->{$language}
+                    "weitere_namen" => $place->ortsthesaurus->weiterenamen->{$language},
+                    "gebaeude_typ" => $place->ortsthesaurus->{'_nested:ortsthesaurus__gebaeudetyp'}[0]->lk_gebaeudetyp_id->_standard->{'1'}->text->{$language}
                 );
              }
 
