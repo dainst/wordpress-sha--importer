@@ -625,6 +625,7 @@ namespace shap_datasource {
                     "gazetteer_id"  => $gazId->gazId,
                     "beschreibung"  => $place->ortsthesaurus->beschreibung->{$language},
                     "weitere_namen" => $place->ortsthesaurus->weiterenamen->{$language},
+                    "place_hierarchy" => $this->merge_full_path($place->_path, $language),
                     "gebaeude_typ" => $place->ortsthesaurus->{'_nested:ortsthesaurus__gebaeudetyp'}[0]->lk_gebaeudetyp_id->_standard->{'1'}->text->{$language}
                 );
              }
@@ -714,6 +715,22 @@ namespace shap_datasource {
                 return $shape;
             }
             return $shape;
+        }
+
+        /**
+         * @param object $object
+         * @param string $lang
+         * @param array $term_collector
+         */
+        private function _merge_full_path($object, $lang = "en-EN"){
+            $full_path_string = "";
+            if (is_array($object)){
+                foreach($object as $key => $value){
+                    $full_path_string .= $value->_standard->{'1'}->text->{$lang} ;
+                    $full_path_string .= ($value->_has_children ? ',':'');
+                }
+            }
+            return $full_path_string;
         }
 
         /**
