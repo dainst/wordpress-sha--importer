@@ -280,6 +280,9 @@ namespace shap_datasource {
             // parse nested field which has lang keys
             $this->_parse_field_to_meta($json_response[0]->_standard->{'1'}->text, $meta_collector, "standard_extra_field");
 
+            // Ersteller der Vorlage
+            $this->_parse_field_to_meta($json_response[0]->bilder->{'_nested:bilder__erstellerdervorlage_new'}[0]->ersteller_der_vorlage_id->_standard->{'1'}->text, $meta_collector, "ersteller_der_vorlage");
+
             $this->_parse_pool($object, $term_collector);
             // $this->_parse_tags($json_response[0], $data);
 
