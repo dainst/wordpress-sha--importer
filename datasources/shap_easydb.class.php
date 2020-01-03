@@ -467,9 +467,12 @@ namespace shap_datasource {
             foreach ($easydb_nested_to_taxonomy as $easydb_nested => $taxonomy) {
                 $n = "_nested:bilder__$easydb_nested";
                 $a = "lk_{$easydb_nested}_id";
-                foreach ($source->$n as $keyword) {
-                    $this->_parse_detail_to_terms($keyword->$a, $term_collector, $taxonomy, $taxonomy);
+                if(is_array($source->$n)){
+                  foreach ($source->$n as $keyword) {
+                      $this->_parse_detail_to_terms($keyword->$a, $term_collector, $taxonomy, $taxonomy);
+                  }
                 }
+
             }
         }
 

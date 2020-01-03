@@ -67,8 +67,11 @@ namespace shap_datasource {
 			} catch (\Exception $e) {
 				$this->error($e->getMessage());
 			}
-
-			return (!count($this->errors));
+			if (is_array($this->errors)){
+				return (!count($this->errors));
+			} else {
+				return true;
+			}
 		}
 
 
