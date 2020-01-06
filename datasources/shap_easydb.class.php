@@ -281,17 +281,17 @@ namespace shap_datasource {
             * MIK needed fields
             */
 
-              // Subject (Type of subject)
-              $this->_parse_field_to_meta($json_response[0]->bilder->ueberschrift, $meta_collector, "caption");
               // Ersteller der Vorlage
               $this->_parse_field_to_meta($json_response[0]->bilder->{'_nested:bilder__erstellerdervorlage_new'}[0]->ersteller_der_vorlage_id->_standard->{'1'}->text, $meta_collector, "author");
+
+              // Art des Motivs
+              $this->_parse_field_to_meta($json_response[0]->bilder->{'_nested:bilder__artdesmotivs_new'}[0]->art_des_motivs_id->_standard->{'1'}->text, $meta_collector, "subject_shows");
+
               // Original Datum
               $this->_parse_custom_single_to_triple($meta_collector, "original_datum", $json_response[0]->bilder->original_datum->value);
               // Fileclass
-              $this->_parse_custom_single_to_triple($meta_collector, "fileclass", $json_response[0]->bilder->bild[1]->class);
+              $this->_parse_custom_single_to_triple($meta_collector, "fileclass", $json_response[0]->bilder->bild[0]->class);
 
-              // Subject (Type of subject)
-              $this->_parse_field_to_meta($json_response[0]->bilder->{'_nested:bilder__artdesmotivs_new'}[0]->art_des_motivs_id->_standard->{'1'}->text, $meta_collector, "type_of_subject");
               // Periode # https://syrianheritage.gbv.de/detail/81439
               $this->_parse_array_to_meta($json_response[0]->bilder->{'_nested:bilder__stilmerkmal'}, $meta_collector, "period");
 
@@ -690,7 +690,7 @@ namespace shap_datasource {
             foreach ($meta_collector as $lang => $lang_meta) {
                 $meta_collector[$lang]["latitude"]       =   $gazId->position->lat;
                 $meta_collector[$lang]["longitude"]      =   $gazId->position->lng;
-                $meta_collector[$lang]["gazetteer_id"]   =   $gazId->gazId;
+                //$meta_collector[$lang]["gazetteer_id"]   =   $gazId->gazId;
                 $meta_collector[$lang]["place_name"]     =   $gazId->displayName;
             }
 
