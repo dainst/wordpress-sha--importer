@@ -289,6 +289,7 @@ namespace shap_datasource {
 
               // Original Datum
               $this->_parse_custom_single_to_triple($meta_collector, "original_datum", $json_response[0]->bilder->original_datum->value);
+
               // Fileclass
               $this->_parse_custom_single_to_triple($meta_collector, "fileclass", $json_response[0]->bilder->bild[0]->class);
 
@@ -748,7 +749,7 @@ namespace shap_datasource {
          */
         private function _get_shape_from_gazetteer($gazId) : string{
             $url = "https://gazetteer.dainst.org/search.json?q=%7B%22bool%22:%7B%22must%22:%5B%20%7B%20%22match%22:%20%7B%20%22_id%22:%20$gazId%20%7D%7D%5D%7D%7D&type=extended";
-            $shape = "none";
+            $shape = "";
             $this->log("Fetching Shape information from Gazetteer: $gazId");
 
             try {
