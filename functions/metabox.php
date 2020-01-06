@@ -7,12 +7,15 @@ add_action('add_meta_boxes', function() {
     $editable_attributes = array(
         'shap_easydb_id',
         'shap_copyright_vermerk',
-        'shap_nested_field',
-        'shap_the_time',
         'shap_place_name',
         'shap_longitude',
         'shap_latitude',
-        'shap_gazetteer_id'
+        'shap_gazetteer_id',
+        'shap_caption',
+        'shap_author',
+        'shap_fileclass',
+        'shap_type_of_subject',
+        'shap_period',
     );
 
     add_meta_box(

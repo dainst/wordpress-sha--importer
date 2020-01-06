@@ -273,26 +273,32 @@ namespace shap_datasource {
 
             // SHAP extrafields
             $this->_parse_custom_single_to_triple($meta_collector, "easydb_id", $system_object_id);
-            // nested field with lang key better use _parse_field_to_meta
-            $this->_parse_custom_single_to_triple($meta_collector, "nested_field", json_encode($json_response[0]->_standard->{'1'}->text->{'de-DE'}));
-            $this->_parse_custom_single_to_triple($meta_collector, "the_time", $json_response[0]->_changelog[0]->time);
 
             // parse nested field which has lang keys
             //$this->_parse_field_to_meta($json_response[0]->_standard->{'1'}->text, $meta_collector, "standard_extra_field");
 
-            // MIK needed fields
-            // Subject (Type of subject)
-            $this->_parse_field_to_meta($json_response[0]->bilder->ueberschrift, $meta_collector, "caption");
+            /*
+            * MIK needed fields
+            */
 
-            // Ersteller der Vorlage
-            $this->_parse_field_to_meta($json_response[0]->bilder->{'_nested:bilder__erstellerdervorlage_new'}[0]->ersteller_der_vorlage_id->_standard->{'1'}->text, $meta_collector, "author");
-            // Original Datum
-            $this->_parse_custom_single_to_triple($meta_collector, "original_datum", $json_response[0]->bilder->original_datum->value);
+              // Subject (Type of subject)
+              $this->_parse_field_to_meta($json_response[0]->bilder->ueberschrift, $meta_collector, "caption");
+              // Ersteller der Vorlage
+              $this->_parse_field_to_meta($json_response[0]->bilder->{'_nested:bilder__erstellerdervorlage_new'}[0]->ersteller_der_vorlage_id->_standard->{'1'}->text, $meta_collector, "author");
+              // Original Datum
+              $this->_parse_custom_single_to_triple($meta_collector, "original_datum", $json_response[0]->bilder->original_datum->value);
+              // Fileclass
+              $this->_parse_custom_single_to_triple($meta_collector, "fileclass", $json_response[0]->bilder->bild[1]->class);
 
-            // Fileclass
-            $this->_parse_field_to_meta($json_response[0]->bilder->{'_nested:bilder__artdervorlage_new'}[1]->art_der_vorlage_id2->_standard->{'1'}->text, $meta_collector, "fileclass");
-            // Subject (Type of subject)
-            $this->_parse_field_to_meta($json_response[0]->bilder->{'_nested:bilder__artdesmotivs_new'}[0]->art_des_motivs_id->_standard->{'1'}->text, $meta_collector, "type_of_subject");
+              // Subject (Type of subject)
+              $this->_parse_field_to_meta($json_response[0]->bilder->{'_nested:bilder__artdesmotivs_new'}[0]->art_des_motivs_id->_standard->{'1'}->text, $meta_collector, "type_of_subject");
+              // Periode # https://syrianheritage.gbv.de/detail/81439
+              $this->_parse_array_to_meta($json_response[0]->bilder->{'_nested:bilder__stilmerkmal'}, $meta_collector, "period");
+
+            /*
+            * MIK needed fields
+            */
+
 
             $this->_parse_pool($object, $term_collector);
             // $this->_parse_tags($json_response[0], $data);
@@ -524,7 +530,48 @@ namespace shap_datasource {
 
                 }
             }
+
         }
+
+
+        /**
+         * @param array $source
+         * @param string $lang
+         */
+        private function _merge_full_array_path($source, $lang = "en-EN"){
+            $full_path_string = "";
+            if (is_array($source) || is_object($source)){
+              $numItems = count($source);
+              $i = 0;
+                foreach($source as $key => $value){
+                  $currenItem = $value->lk_stilmerkmal_id->_standard->{'1'}->text->{$lang};
+                  if (!empty($currenItem)){
+                    $full_path_string .= $currenItem;
+                    $full_path_string .= (++$i !== $numItems && !empty($currenItem) ? ', ' : '' );
+                  }
+                }
+            }
+            return $full_path_string;
+        }
+
+        /**
+         * @param $object
+         * @param array $meta
+         * @param string $field_name
+         * @param bool $single
+         */
+        private function _parse_array_to_meta($object, array &$meta, string $field_name, bool $single = true) {
+          if (!is_array($object) || !is_array($object))
+            return;
+
+           foreach ($this->_language_map as $wp_language => $easydb_language) {
+              // TODO What is single used for?
+              if ($single) {
+                  $meta[$easydb_language][$field_name] = $this->_merge_full_array_path($object, $easydb_language);
+              }
+            }
+        }
+
 
         /**
          * @param $source
@@ -626,7 +673,7 @@ namespace shap_datasource {
                     "beschreibung"  => $place->ortsthesaurus->beschreibung->{$language},
                     "weitere_namen" => $place->ortsthesaurus->weiterenamen->{$language},
                     "place_name"    => $this->_get_single_place_name($place->_path, $language),
-                    "place_hierarchy" => $this->_merge_full_path($place->_path, $language),
+                    "place_hierarchy" => $this->_merge_full_place_path($place->_path, $language),
                     "gebaeude_typ" => $place->ortsthesaurus->{'_nested:ortsthesaurus__gebaeudetyp'}[0]->lk_gebaeudetyp_id->_standard->{'1'}->text->{$language}
                 );
              }
@@ -656,7 +703,7 @@ namespace shap_datasource {
          * @param string $custom_field_value
          * @throws \Exception
          */
-        function _parse_custom_single_to_triple(array &$meta_collector, string $custom_field_name, string $custom_field_value)  {
+        function _parse_custom_single_to_triple(array &$meta_collector, $custom_field_name, $custom_field_value)  {
 
             if (!isset($custom_field_name) || !isset($custom_field_value)) {
                 return;
@@ -722,7 +769,7 @@ namespace shap_datasource {
          * @param array $source
          * @param string $lang
          */
-        private function _merge_full_path($source, $lang = "en-EN"){
+        private function _merge_full_place_path($source, $lang = "en-EN"){
             $full_path_string = "";
             if (is_array($source) || is_object($source)){
                 foreach($source as $key => $value){
