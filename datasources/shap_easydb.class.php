@@ -752,11 +752,17 @@ namespace shap_datasource {
             $shape = "";
             $this->log("Fetching Shape information from Gazetteer: $gazId");
 
+            $geojsonStart = '{"type":"FeatureCollection","features":[{"type":"Feature","properties":{},"geometry":{"type":"Polygon","coordinates":';
+            $geojsonEnd = '}}]}';
+
             try {
                 $obj = $this->_json_decode($this->_fetch_external_data($url));
                 $obj = $obj->result[0];
                 if ($obj->prefLocation->shape){
                   $shape = json_encode($obj->prefLocation->shape);
+                  $shape = str_replace("[[[[","[[[",$shape);
+                  $shape = str_replace("]]]]","]]]",$shape);
+                  $shape = $geojsonStart.$shape.$geojsonEnd;
                 }
                 $this->log($shape);
             } catch (\Exception $e) {
