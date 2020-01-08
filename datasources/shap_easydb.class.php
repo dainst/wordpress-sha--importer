@@ -5,6 +5,7 @@ namespace shap_datasource {
     class shap_easydb extends abstract_datasource {
 
         public $debug = false;
+        public $overwrite_item = true;
 
         public $force_curl = true;
 
@@ -185,16 +186,36 @@ namespace shap_datasource {
 
             $this->get_easy_db_session_token();
 
-            $search = array(
+            // $search = array(
+            //     "limit" => $this->items_per_page,
+            //     "objecttypes" => array("bilder"),
+  	        //     "generate_rights" => false,
+            //       "sort" => array(
+            //           array(
+            //               "field" =>"_system_object_id"
+            //           )
+            //       )
+            //   );
+
+              $search = array(
                 "limit" => $this->items_per_page,
                 "objecttypes" => array("bilder"),
-  	            "generate_rights" => false,
-                  "sort" => array(
+                "search" => array(
                       array(
-                          "field" =>"_system_object_id"
+                         "bool" => "must",
+                         "fields" => array(
+                            "_linked._asset.class"
+                         ),
+                         "type" => "in",
+                         "in" => array("image","audio","office") // "video","image","audio","office"
                       )
-                  )
-              );
+                   ),
+                   "sort" => array(
+                       array(
+                           "field" =>"_system_object_id"
+                       )
+                   )
+             );
 
             $search['offset'] = $page * $this->items_per_page;
 
@@ -215,6 +236,8 @@ namespace shap_datasource {
          */
         function parse_result_set($response, bool $test = false) : array {
             $response = $this->_json_decode($response);
+            // TODO Remove next line
+            $this->log(json_encode($response),"info");
 
             $this->pages = (int) ($response->count / $this->items_per_page) + 1;
             $this->page = isset($response->offset) ? ((int) ($response->offset / $this->items_per_page) + 1) : 1;
@@ -654,7 +677,8 @@ namespace shap_datasource {
             $get_shape_from_gazeteer = $this->_get_shape_from_gazetteer($gazId->gazId);
 
             if (!isset($gazId->position)) {
-                return;
+              $this->log("Place has no lat_long information and hence will not be added", "info");
+              return;
             }
 
             // TODO remove again
@@ -848,16 +872,19 @@ namespace shap_datasource {
          * @param $meta
          */
         private function _update_meta($post_id, $meta) {
-
-          $the_post = wp_is_post_revision( $post_id );
-          if ( $the_post ) {
-              $post_id = $the_post;
+          if ($this->overwrite_item){
+            if ( $the_post )
+                $post_id = wp_is_post_revision( $post_id );;
+            foreach ($meta as $key => $value) {
+                update_post_meta($post_id, "shap_$key", $value, $prev_value = '');
+            }
+          } else {
+            foreach ($meta as $key => $value) {
+                add_post_meta($post_id, "shap_$key", $value, true);
+            }
           }
 
-          foreach ($meta as $key => $value) {
-              //add_post_meta($post_id, "shap_$key", $value, true);
-              update_post_meta($post_id, "shap_$key", $value, $prev_value = '');
-          }
+
         }
 
 
