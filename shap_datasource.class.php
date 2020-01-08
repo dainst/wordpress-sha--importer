@@ -18,7 +18,7 @@ namespace shap_datasource {
 	abstract class abstract_datasource {
 
 		public $debug = true;
-
+		public $overwrite_item = false;
 		protected $results = array();
 
 		// saves current search params
@@ -28,8 +28,7 @@ namespace shap_datasource {
 		// pagination data
 		public $page = 1; //current page
 		public $pages = false; // number of pages. false means: unknown
-		// TODO this needs to be 4?
-		public $items_per_page = 1;
+		public $items_per_page = 4;
 
 		// log collector
 		public $log = array();
