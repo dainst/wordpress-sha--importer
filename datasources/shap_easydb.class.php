@@ -449,17 +449,30 @@ namespace shap_datasource {
                 return ($v->status !== "failed") && (!$v->_not_allowed);
             });
 
-            if (isset($versions['full'])) {
-                $v = 'full';
-            } else if (isset($versions['original'])) {
-                $v = 'original';
+            // if (isset($versions['full'])) {
+            //     $v = 'full';
+            // } else if (isset($versions['original'])) {
+            //     $v = 'original';
+            // } else if (isset($versions['small'])) {
+            //     $v = 'small';
+            // } else {
+            //     throw new \Exception("Could not fetch Image (no version available)");
+            // }
+
+            if (isset($versions['huge'])) {
+                return $versions['huge']; // ~1305px width
+            } else if (isset($versions['preview'])) {
+                return $versions['preview']; // ~1305px width
+            } else if (isset($versions['full'])) {
+                return $versions['full']; // ~3427px width
             } else if (isset($versions['small'])) {
-                $v = 'small';
+                  return $versions['small']; // ~250px width
             } else {
                 throw new \Exception("Could not fetch Image (no version available)");
             }
 
-            return $versions[$v];
+
+            // return $versions[$v];
         }
 
         /**
