@@ -308,7 +308,7 @@ namespace shap_datasource {
               $this->_parse_field_to_meta($json_response[0]->bilder->{'_nested:bilder__erstellerdervorlage_new'}[0]->ersteller_der_vorlage_id->_standard->{'1'}->text, $meta_collector, "author");
 
               // Art des Motivs
-              $this->_parse_field_to_meta($json_response[0]->bilder->{'_nested:bilder__artdesmotivs_new'}[0]->art_des_motivs_id->_standard->{'1'}->text, $meta_collector, "subject_shows");
+              $this->_parse_field_to_meta($json_response[0]->bilder->{'_nested:bilder__artdesmotivs_new'}[0]->art_des_motivs_id->_standard->{'1'}->text, $meta_collector, "type_of_subject");
 
               // Original Datum
               $this->_parse_custom_single_to_triple($meta_collector, "original_datum", $json_response[0]->bilder->original_datum->value);
@@ -707,12 +707,12 @@ namespace shap_datasource {
                     "latitude"      => $gazId->position->lat,
                     "longitude"     => $gazId->position->lng,
                     "shape"         => $get_shape_from_gazeteer,
+                    "place_type"    => $place->ortsthesaurus->{'_nested:ortsthesaurus__gebaeudetyp'}[0]->lk_gebaeudetyp_id->_standard->{'1'}->text->{$language},
                     "gazetteer_id"  => $gazId->gazId,
                     "beschreibung"  => $place->ortsthesaurus->beschreibung->{$language},
                     "weitere_namen" => $place->ortsthesaurus->weiterenamen->{$language},
                     "place_name"    => $this->_get_single_place_name($place->_path, $language),
-                    "place_hierarchy" => $this->_merge_full_place_path($place->_path, $language),
-                    "gebaeude_typ" => $place->ortsthesaurus->{'_nested:ortsthesaurus__gebaeudetyp'}[0]->lk_gebaeudetyp_id->_standard->{'1'}->text->{$language}
+                    "place_hierarchy" => $this->_merge_full_place_path($place->_path, $language)
                 );
              }
 

@@ -14,7 +14,8 @@ add_action('add_meta_boxes', function() {
         'shap_place_name',
         'shap_period',
         'shap_author',
-        'shap_fileclass'
+        'shap_fileclass',
+        'shap_type_of_subject'
     );
 
     add_meta_box(
