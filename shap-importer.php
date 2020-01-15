@@ -1,7 +1,7 @@
 <?php
 /**
  * @package shap-importer
- * @version 0.0.1
+ * @version 0.0.2
  */
 /*
 Plugin Name: shap-importer
@@ -9,7 +9,7 @@ Plugin URI:  https://github.com/dainst/wordpress-sha--importer
 Description: wordpress-importer
 Author:	     Philipp Franck
 Author URI:	 http://www.dainst.org/
-Version:     0.0.1
+Version:     0.0.2
 */
 /*
 
