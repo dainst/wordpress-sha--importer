@@ -200,16 +200,57 @@ namespace shap_datasource {
               $search = array(
                 "limit" => $this->items_per_page,
                 "objecttypes" => array("bilder"),
-                "search" => array(
-                      array(
-                         "bool" => "must",
-                         "fields" => array(
-                            "_linked._asset.class"
-                         ),
-                         "type" => "in",
-                         "in" => array("image","audio","office") // "video","image","audio","office"
-                      )
-                   ),
+                "search" => [
+                   [
+                       "type" => "complex",
+                       "__filter" => "SearchInput",
+                       "search" => [
+                          [
+                             "type" => "complex",
+                             "search" => [
+                               [
+                                   "type" => "in",
+                                   "bool" => "must",
+                                   "fields" => ["_objecttype"],
+                                   "in" => [
+                                         "bilder",
+                                         "image",
+                                         "audio",
+                                         "office"
+                                      ]
+                               ],
+                               [
+                       "type" => "in",
+                                   "bool" => "must",
+                                   "fields" => [
+                                   "_tags._id"
+                               ],
+                                   "in" => [19]
+                               ]
+                             ],
+                             "bool" => "must"
+                          ],
+                          [
+                             "bool" => "must_not",
+                             "search" => [
+                               [
+                                   "_unnest" => true,
+                                   "_unset_filter" => true,
+                                   "bool" => "must",
+                                   "search" => [
+                                      ["fields" => ["bilder.ort_des_motivs_id._global_object_id"],
+                                         "in" => [null],
+                                         "type" => "in"
+                                      ]
+                                   ],
+                                   "type" => "complex"
+                               ]
+                           ],
+                           "type" => "complex"
+                        ]
+                       ]
+                   ]
+         ],
                    "sort" => array(
                        array(
                            "field" =>"_system_object_id"
@@ -768,12 +809,13 @@ namespace shap_datasource {
                 return $triple;
             }
 
-            foreach ($obj->names as $name) {
-                if (isset($this->_language_map_gazetteer[$name->language]) and !$triple[$this->_language_map_gazetteer[$name->language]]) {
-                    $triple[$this->_language_map_gazetteer[$name->language]] = $name->title;
-                }
+            if (is_array($source) || is_object($source)){
+              foreach ($obj->names as $name) {
+                  if (isset($this->_language_map_gazetteer[$name->language]) and !$triple[$this->_language_map_gazetteer[$name->language]]) {
+                      $triple[$this->_language_map_gazetteer[$name->language]] = $name->title;
+                  }
+              }
             }
-
             //$this->log(shap_debug($triple));
 
             return $triple;
