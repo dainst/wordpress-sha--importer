@@ -9,7 +9,7 @@ Plugin URI:  https://github.com/dainst/wordpress-sha--importer
 Description: wordpress-importer
 Author:	     Philipp Franck (Extended by Toni Schoenbuchner)
 Author URI:	 http://www.dainst.org/
-Version:     0.0.3
+Version:     0.0.4
 */
 /*
 
