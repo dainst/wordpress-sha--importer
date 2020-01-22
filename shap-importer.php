@@ -7,9 +7,9 @@
 Plugin Name: shap-importer
 Plugin URI:  https://github.com/dainst/wordpress-sha--importer
 Description: wordpress-importer
-Author:	     Philipp Franck
+Author:	     Philipp Franck (Extended by Toni Schoenbuchner)
 Author URI:	 http://www.dainst.org/
-Version:     0.0.2
+Version:     0.0.3
 */
 /*
 
