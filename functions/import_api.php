@@ -1,6 +1,6 @@
 <?php
 add_action('rest_api_init', function() {
-    register_rest_route( 'shap_importer/v1', '/import/(?P<source>\w+)/(?P<page>\d+)', array(
+    register_rest_route( 'shap_importer/v1', '/import/(?P<source>\w+)/(?P<page>\d+)(?:/(?P<ids>[0-9,]+))?', array(
 
         'methods' => 'POST',
 
@@ -19,6 +19,7 @@ add_action('rest_api_init', function() {
 
             $source = $request->get_param('source');
             $page = (int) $request->get_param('page');
+            $ids = ($request->get_param('ids') ? $request->get_param('ids') : false);
 
             try {
                 $ds = shap_get_datasource($source);
@@ -30,8 +31,10 @@ add_action('rest_api_init', function() {
                 return new WP_Error(500, "Error: " . $exception->getMessage());
             }
 
-            $ds->items_per_page = 4;
-            $success = $ds->fetch($page);
+            // if we pass ids for sync we use a limit of 100 else 4
+            $ds->items_per_page = ($ids ? 100 : 4);
+            //$ds->items_per_page = 4;
+            $success = $ds->fetch($page,$ids);
 
             if (!$success) {
                 return new WP_Error(500, "Errors while importing", array('log' => $ds->log));
@@ -58,4 +61,3 @@ add_action('rest_api_init', function() {
         },
     ));
 });
-

@@ -25,6 +25,11 @@ if (!isset($argv[1]) or !isset($argv[2])) {
 
 $page_from = (int) $argv[1];
 $page_to = (int) $argv[2];
+if ( isset($argv[3]) ){
+  $ids_to_sync = (string) $argv[3];
+} else {
+  $ids_to_sync = false;
+}
 
 if ($page_to < $page_from) {
     echo "Negative Page offset\n";
@@ -59,11 +64,16 @@ for ($page = $page_from; $page <= $page_to; $page++) {
     fwrite($log_file_handle, "\n---- Importing page $page ----\n");
     echo "Importing page $page\n";
 
-    $curl = curl_init();
+    if ($page_to == 1 && $ids_to_sync !== false){
+      $curl_url = "http://cms/wp-json/shap_importer/v1/import/shap_easydb/$page/$ids_to_sync";
+    } else {
+      $curl_url = "http://cms/wp-json/shap_importer/v1/import/shap_easydb/$page";
+    }
 
+    $curl = curl_init();
     curl_setopt_array($curl, array(
         CURLOPT_PORT => "80",
-        CURLOPT_URL => "http://cms/wp-json/shap_importer/v1/import/shap_easydb/$page",
+        CURLOPT_URL => $curl_url,
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_ENCODING => "",
         CURLOPT_MAXREDIRS => 10,

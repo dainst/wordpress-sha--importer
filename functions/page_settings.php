@@ -13,7 +13,10 @@ add_action('admin_menu', function() {
             $class = "notice-error";
         }
 
+        $ow = $ds->overwrite_item ? "yes" : "no";
+
         echo "<div class='notice $class'>Plugin health status: $check</div>";
+        echo "<div class='notice $class'>Overwrite items: $ow</div>";
 
         $url = admin_url('admin.php');
 

@@ -5,6 +5,7 @@ namespace shap_datasource {
     class shap_easydb extends abstract_datasource {
 
         public $debug = false;
+        public $overwrite_item = true;
 
         public $force_curl = true;
 
@@ -173,7 +174,7 @@ namespace shap_datasource {
          * @return string
          */
         function api_record_url($id, $params = array()) : string {
-            return "{$this->_easydb_url}/lists/bilder/id/global_object_id/$id";
+            return "{$this->_easydb_url}/detail/$id";
         }
 
         /**
@@ -181,38 +182,90 @@ namespace shap_datasource {
          * @return object
          * @throws \Exception
          */
-        function api_fetch_url(int $page = 0) {
+        function api_fetch_url(int $page = 0, $ids = false) {
 
             $this->get_easy_db_session_token();
 
-            $search = array(
+            // $search = array(
+            //     "limit" => $this->items_per_page,
+            //     "objecttypes" => array("bilder"),
+  	        //     "generate_rights" => false,
+            //       "sort" => array(
+            //           array(
+            //               "field" =>"_system_object_id"
+            //           )
+            //       )
+            //   );
+
+              $search = array(
                 "limit" => $this->items_per_page,
                 "objecttypes" => array("bilder"),
-	            "generate_rights" => false,
-                "sort" => array(
-                    array(
-                        "field" =>"_system_object_id"
-                    )
-                )
-            );
-
-            //            if (!in_array($query, array("", "*"))) {
-            //                $search["search"] = array(
-            //                    array(
-            //                        "type" => "match",
-            //                        "mode" => "token",
-            //                        "string"=> $query,
-            //                        "phrase"=> true
-            //                    )
-            //                );
-            //            }
-
+                "search" => [
+                   [
+                       "type" => "complex",
+                       "__filter" => "SearchInput",
+                       "search" => [
+                          [
+                             "type" => "complex",
+                             "search" => [
+                               [
+                                   "type" => "in",
+                                   "bool" => "must",
+                                   "fields" => ["_objecttype"],
+                                   "in" => [
+                                         "bilder",
+                                         "image",
+                                         "audio",
+                                         "office"
+                                      ]
+                               ],
+                               [
+                       "type" => "in",
+                                   "bool" => "must",
+                                   "fields" => [
+                                   "_tags._id"
+                               ],
+                                   "in" => [19]
+                               ]
+                             ],
+                             "bool" => "must"
+                          ],
+                          [
+                             "bool" => "must_not",
+                             "search" => [
+                               [
+                                   "_unnest" => true,
+                                   "_unset_filter" => true,
+                                   "bool" => "must",
+                                   "search" => [
+                                      ["fields" => ["bilder.ort_des_motivs_id._global_object_id"],
+                                         "in" => [null],
+                                         "type" => "in"
+                                      ]
+                                   ],
+                                   "type" => "complex"
+                               ]
+                           ],
+                           "type" => "complex"
+                        ]
+                       ]
+                   ]
+         ],
+                   "sort" => array(
+                       array(
+                           "field" =>"_system_object_id"
+                       )
+                   )
+             );
 
             $search['offset'] = $page * $this->items_per_page;
 
+            // if we have IDs we limit the search
+            $limit_to_ids = ($ids !== false ? "&system_object_ids=$ids" : "");
+
             return (object) array(
                 'method' => 'post',
-                'url' => "{$this->_easydb_url}/api/v1/search?token={$this->_session_token}",
+                'url' => "{$this->_easydb_url}/api/v1/search?token={$this->_session_token}&$limit_to_ids",
                 'post_json' => $search
             );
         }
@@ -224,6 +277,8 @@ namespace shap_datasource {
          */
         function parse_result_set($response, bool $test = false) : array {
             $response = $this->_json_decode($response);
+            // TODO Remove next line
+            $this->log(json_encode($response),"info");
 
             $this->pages = (int) ($response->count / $this->items_per_page) + 1;
             $this->page = isset($response->offset) ? ((int) ($response->offset / $this->items_per_page) + 1) : 1;
@@ -273,12 +328,45 @@ namespace shap_datasource {
             $term_collector = $this->_init_term_collector();
             $this->_parse_place($object, $meta_collector, $term_collector);
             $this->_parse_field_to_meta($object->copyright_vermerk, $meta_collector, "copyright_vermerk");
+            //$this->_parse_field_to_meta($object->beschreibung, $meta_collector, "quelle_old");
+            //$this->_parse_field_to_meta($object->titel, $meta_collector, "quelle_old");
             $this->_parse_nested($object, $term_collector);
 
             $this->_parse_blocks($object, $term_collector);
             $this->_parse_date($object, $term_collector);
+
+            // SHAP extrafields
+            $this->_parse_custom_single_to_triple($meta_collector, "easydb_id", $system_object_id);
+
+            // parse nested field which has lang keys
+            //$this->_parse_field_to_meta($json_response[0]->_standard->{'1'}->text, $meta_collector, "standard_extra_field");
+
+            /*
+            * MIK needed fields
+            */
+
+              // Ersteller der Vorlage
+              $this->_parse_field_to_meta($json_response[0]->bilder->{'_nested:bilder__erstellerdervorlage_new'}[0]->ersteller_der_vorlage_id->_standard->{'1'}->text, $meta_collector, "author");
+
+              // Art des Motivs
+              $this->_parse_field_to_meta($json_response[0]->bilder->{'_nested:bilder__artdesmotivs_new'}[0]->art_des_motivs_id->_standard->{'1'}->text, $meta_collector, "type_of_subject");
+
+              // Original Datum
+              $this->_parse_custom_single_to_triple($meta_collector, "original_datum", $json_response[0]->bilder->original_datum->value);
+
+              // Fileclass
+              $this->_parse_custom_single_to_triple($meta_collector, "fileclass", $json_response[0]->bilder->bild[0]->class);
+
+              // Periode # https://syrianheritage.gbv.de/detail/81439
+              $this->_parse_array_to_meta($json_response[0]->bilder->{'_nested:bilder__stilmerkmal'}, $meta_collector, "period");
+
+            /*
+            * MIK needed fields
+            */
+
+
             $this->_parse_pool($object, $term_collector);
-//            $this->_parse_tags($json_response[0], $data);
+            // $this->_parse_tags($json_response[0], $data);
 
 
             $wp_terms = $this->_add_terms_to_wp($term_collector);
@@ -402,17 +490,30 @@ namespace shap_datasource {
                 return ($v->status !== "failed") && (!$v->_not_allowed);
             });
 
-            if (isset($versions['full'])) {
-                $v = 'full';
-            } else if (isset($versions['original'])) {
-                $v = 'original';
+            // if (isset($versions['full'])) {
+            //     $v = 'full';
+            // } else if (isset($versions['original'])) {
+            //     $v = 'original';
+            // } else if (isset($versions['small'])) {
+            //     $v = 'small';
+            // } else {
+            //     throw new \Exception("Could not fetch Image (no version available)");
+            // }
+
+            if (isset($versions['huge'])) {
+                return $versions['huge']; // ~1305px width
+            } else if (isset($versions['preview'])) {
+                return $versions['preview']; // ~1305px width
+            } else if (isset($versions['full'])) {
+                return $versions['full']; // ~3427px width
             } else if (isset($versions['small'])) {
-                $v = 'small';
+                  return $versions['small']; // ~250px width
             } else {
                 throw new \Exception("Could not fetch Image (no version available)");
             }
 
-            return $versions[$v];
+
+            // return $versions[$v];
         }
 
         /**
@@ -464,9 +565,12 @@ namespace shap_datasource {
             foreach ($easydb_nested_to_taxonomy as $easydb_nested => $taxonomy) {
                 $n = "_nested:bilder__$easydb_nested";
                 $a = "lk_{$easydb_nested}_id";
-                foreach ($source->$n as $keyword) {
-                    $this->_parse_detail_to_terms($keyword->$a, $term_collector, $taxonomy, $taxonomy);
+                if(is_array($source->$n)){
+                  foreach ($source->$n as $keyword) {
+                      $this->_parse_detail_to_terms($keyword->$a, $term_collector, $taxonomy, $taxonomy);
+                  }
                 }
+
             }
         }
 
@@ -504,14 +608,54 @@ namespace shap_datasource {
 
                 }
             }
+
         }
+
+
+        /**
+         * @param array $source
+         * @param string $lang
+         */
+        private function _merge_full_array_path($source, $lang = "en-EN"){
+            $full_path_string = "";
+            if (is_array($source) || is_object($source)){
+              $numItems = count($source);
+              $i = 0;
+                foreach($source as $key => $value){
+                  $currenItem = $value->lk_stilmerkmal_id->_standard->{'1'}->text->{$lang};
+                  if (!empty($currenItem)){
+                    $full_path_string .= $currenItem;
+                    $full_path_string .= (++$i !== $numItems && !empty($currenItem) ? ', ' : '' );
+                  }
+                }
+            }
+            return $full_path_string;
+        }
+
+        /**
+         * @param $object
+         * @param array $meta
+         * @param string $field_name
+         * @param bool $single
+         */
+        private function _parse_array_to_meta($object, array &$meta, string $field_name, bool $single = true) {
+          if (!is_array($object) || !is_array($object))
+            return;
+
+           foreach ($this->_language_map as $wp_language => $easydb_language) {
+              // TODO What is single used for?
+              if ($single) {
+                  $meta[$easydb_language][$field_name] = $this->_merge_full_array_path($object, $easydb_language);
+              }
+            }
+        }
+
 
         /**
          * @param $source
          * @param array $term_collector
          */
         private function _parse_date($source, array &$term_collector) {
-
             if (isset($source->original_datum)) {
                 $this->_collect_single_language_term_as_triple($term_collector, 'time', 'decade', $this->_get_decade($source->original_datum->_from));
                 $this->_collect_single_language_term_as_triple($term_collector, 'time', 'year', date("Y", strtotime($source->original_datum->_from)));
@@ -570,6 +714,7 @@ namespace shap_datasource {
             }
 
             $soid = $source->ort_des_motivs_id->_system_object_id;
+            //$gazId = $source->ort_des_motivs_id->gazId;
 
             $this->log("parsing place $soid", "info");
 
@@ -581,27 +726,39 @@ namespace shap_datasource {
                 return;
             }
 
+            // get shape from idai
             $gazId = $place->ortsthesaurus->gazetteer_id;
+            $get_shape_from_gazeteer = $this->_get_shape_from_gazetteer($gazId->gazId);
 
             if (!isset($gazId->position)) {
-                return;
+              $this->log("Place has no lat_long information and hence will not be added", "info");
+              return;
             }
+
+            // TODO remove again
+            $this->log("parsing place " . json_encode($place->ortsthesaurus->beschreibung->{'de-DE'}), "info");
 
             /**
              * unfortunately $gazId->otherNames are not localized in easydb, so we have to query gazetteer to get the localized names
              */
             $triple = $this->_get_tranlsations_from_gazetteer($gazId->gazId);
-
             foreach ($triple as $language => $value) {
                 $triple[$language] = array(
                     "value"         => $value ? $value : $gazId->displayName,
                     "latitude"      => $gazId->position->lat,
                     "longitude"     => $gazId->position->lng,
-                    "gazetteer_id"  => $gazId->gazId
+                    "shape"         => $get_shape_from_gazeteer,
+                    "place_type"    => $place->ortsthesaurus->{'_nested:ortsthesaurus__gebaeudetyp'}[0]->lk_gebaeudetyp_id->_standard->{'1'}->text->{$language},
+                    "gazetteer_id"  => $gazId->gazId,
+                    "beschreibung"  => $place->ortsthesaurus->beschreibung->{$language},
+                    "weitere_namen" => $place->ortsthesaurus->weiterenamen->{$language},
+                    "place_name"    => $this->_get_single_place_name($place->_path, $language),
+                    "place_hierarchy" => $this->_merge_full_place_path($place->_path, $language)
                 );
              }
 
             $term_collector['places']['place'][] = $triple;
+
 
             //$this->log('$term_collector' . shap_debug($term_collector));
 
@@ -612,10 +769,28 @@ namespace shap_datasource {
             foreach ($meta_collector as $lang => $lang_meta) {
                 $meta_collector[$lang]["latitude"]       =   $gazId->position->lat;
                 $meta_collector[$lang]["longitude"]      =   $gazId->position->lng;
-                $meta_collector[$lang]["gazetteer_id"]   =   $gazId->gazId;
+                //$meta_collector[$lang]["gazetteer_id"]   =   $gazId->gazId;
                 $meta_collector[$lang]["place_name"]     =   $gazId->displayName;
             }
 
+        }
+
+
+        /**
+         * @param array $meta_collector
+         * @param string $custom_field_name
+         * @param string $custom_field_value
+         * @throws \Exception
+         */
+        function _parse_custom_single_to_triple(array &$meta_collector, $custom_field_name, $custom_field_value)  {
+
+            if (!isset($custom_field_name) || !isset($custom_field_value)) {
+                return;
+            }
+
+            foreach ($meta_collector as $lang => $lang_meta) {
+                $meta_collector[$lang][$custom_field_name] = trim($custom_field_value,'"');
+            }
         }
 
         private function _get_tranlsations_from_gazetteer($gazId) : array {
@@ -634,16 +809,77 @@ namespace shap_datasource {
                 return $triple;
             }
 
-            foreach ($obj->names as $name) {
-                if (isset($this->_language_map_gazetteer[$name->language]) and !$triple[$this->_language_map_gazetteer[$name->language]]) {
-                    $triple[$this->_language_map_gazetteer[$name->language]] = $name->title;
-                }
+            if (is_array($source) || is_object($source)){
+              foreach ($obj->names as $name) {
+                  if (isset($this->_language_map_gazetteer[$name->language]) and !$triple[$this->_language_map_gazetteer[$name->language]]) {
+                      $triple[$this->_language_map_gazetteer[$name->language]] = $name->title;
+                  }
+              }
             }
-
             //$this->log(shap_debug($triple));
 
             return $triple;
         }
+
+        /**
+         * @param string $gazId
+         * @return string $shape
+         * @throws \Exception
+         */
+        private function _get_shape_from_gazetteer($gazId) : string{
+            $url = "https://gazetteer.dainst.org/search.json?q=%7B%22bool%22:%7B%22must%22:%5B%20%7B%20%22match%22:%20%7B%20%22_id%22:%20$gazId%20%7D%7D%5D%7D%7D&type=extended";
+            $shape = "";
+            $this->log("Fetching Shape information from Gazetteer: $gazId");
+
+            $geojsonStart = '{"type":"FeatureCollection","features":[{"type":"Feature","properties":{},"geometry":{"type":"Polygon","coordinates":';
+            $geojsonEnd = '}}]}';
+
+            try {
+                $obj = $this->_json_decode($this->_fetch_external_data($url));
+                $obj = $obj->result[0];
+                if ($obj->prefLocation->shape){
+                  $shape = json_encode($obj->prefLocation->shape);
+                  $shape = str_replace("[[[[","[[[",$shape);
+                  $shape = str_replace("]]]]","]]]",$shape);
+                  $shape = $geojsonStart.$shape.$geojsonEnd;
+                }
+                $this->log($shape);
+            } catch (\Exception $e) {
+                $this->log("Could not get shape vom iDAI.gazetteer ($url): " . $e->getMessage(), "warning");
+                return $shape;
+            }
+            return $shape;
+        }
+
+        /**
+         * @param array $source
+         * @param string $lang
+         */
+        private function _merge_full_place_path($source, $lang = "en-EN"){
+            $full_path_string = "";
+            if (is_array($source) || is_object($source)){
+                foreach($source as $key => $value){
+                    $full_path_string .= "'".$value->_standard->{'1'}->text->{$lang}."'" ;
+                    $full_path_string .= ($value->_has_children ? ',':'');
+                }
+            }
+            return $full_path_string;
+        }
+
+        /**
+         * @param array $source
+         * @param string $lang
+         */
+        function _get_single_place_name($source, $lang = "en-EN"){
+            $last_item = "";
+            if (is_array($source)){
+                $last_array_item = end($source);
+                $last_item= $last_array_item->_standard->{'1'}->text->{$lang};
+            }
+            return $last_item;
+        }
+
+
 
         /**
          * @param array $term_collector
@@ -691,10 +927,19 @@ namespace shap_datasource {
          * @param $meta
          */
         private function _update_meta($post_id, $meta) {
-
+          if ($this->overwrite_item){
+            if ( $the_post )
+                $post_id = wp_is_post_revision( $post_id );;
+            foreach ($meta as $key => $value) {
+                update_post_meta($post_id, "shap_$key", $value, $prev_value = '');
+            }
+          } else {
             foreach ($meta as $key => $value) {
                 add_post_meta($post_id, "shap_$key", $value, true);
             }
+          }
+
+
         }
 
 
@@ -911,7 +1156,6 @@ namespace shap_datasource {
         private function _add_terms_to_wp(array $tag_array) {
 
             $default_language = wpml_get_default_language();
-
             // double check if order of languages was set correctly (theoretically redundant)
             if (array_keys($this->_language_map)[0] != $default_language) {
                 $first = array_keys($this->_language_map)[0];
@@ -936,7 +1180,9 @@ namespace shap_datasource {
                                 ? array($tag_value_triple[$easydb_language]['value'], $tag_value_triple[$easydb_language])
                                 : array($tag_value_triple[$easydb_language], array());
                             $params = array();
-                            $params["description"] = "Imported from EasyDB\n" . date("d.m.Y h:i:s");
+                            //$params["description"] = "Imported from EasyDB\n" . date("d.m.Y h:i:s");
+                            $multilanguage_description = $tag_array['places']['place'][0][$easydb_language]['beschreibung'];
+                            $params["description"] = $multilanguage_description;
 
                             if (!$term_value) {
                                 $this->log("Term $taxonomy->$term_set_key->$triple_nr->$wp_language has no value:", "warning");
